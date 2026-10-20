@@ -1,0 +1,9 @@
+/.packages/
+/build/
+/build-*/
+/artifacts/
+/.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
