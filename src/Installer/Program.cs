@@ -9,15 +9,15 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("RPM Browser Lite Setup")]
 [assembly: AssemblyProduct("RPM Browser Lite")]
-[assembly: AssemblyVersion("2.8.24.0")]
-[assembly: AssemblyFileVersion("2.8.24.0")]
+[assembly: AssemblyVersion("2.8.25.0")]
+[assembly: AssemblyFileVersion("2.8.25.0")]
 
 namespace ChatGPTLiteInstaller
 {
     internal static class Program
     {
         internal const string ProductName = "RPM Browser Lite";
-        private const string ProductVersion = "2.8.24";
+        private const string ProductVersion = "2.8.25";
         private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM Browser Lite";
         private const string LegacyProductName = "ChatGPT Lite";
         private static readonly string[] PayloadFiles = new string[]
@@ -47,7 +47,8 @@ namespace ChatGPTLiteInstaller
             }
             if (args.Length > 0 && string.Equals(args[0], "/silent", StringComparison.OrdinalIgnoreCase))
             {
-                WaitForApplicationExit();
+                if (!WaitForApplicationExit())
+                    return;
                 // A verified automatic update should leave the user with the
                 // updated application ready to use, not silently installed.
                 try { Install(true, true); }
@@ -121,7 +122,7 @@ namespace ChatGPTLiteInstaller
             RegisterUninstaller(directory, uninstaller);
 
             if (runAfterInstall)
-                Process.Start(Path.Combine(directory, "RPMBrowserLite.exe"));
+                LaunchApplication(directory);
         }
 
         private static string GetFallbackInstallDirectory()
@@ -143,10 +144,38 @@ namespace ChatGPTLiteInstaller
                 {
                     if (source == null)
                         throw new InvalidDataException("Falta un componente del instalador: " + file);
-                    using (FileStream target = File.Create(Path.Combine(directory, file)))
-                        source.CopyTo(target);
+                    string destination = Path.Combine(directory, file);
+                    string temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+                    try
+                    {
+                        using (FileStream target = File.Create(temporary))
+                            source.CopyTo(target);
+                        if (File.Exists(destination))
+                            File.Replace(temporary, destination, null, true);
+                        else
+                            File.Move(temporary, destination);
+                    }
+                    finally
+                    {
+                        try { if (File.Exists(temporary)) File.Delete(temporary); }
+                        catch { }
+                    }
                 }
             }
+        }
+
+        private static void LaunchApplication(string directory)
+        {
+            string executable = Path.Combine(directory, "RPMBrowserLite.exe");
+            if (!File.Exists(executable))
+                throw new FileNotFoundException("No se encontrÃ³ la aplicaciÃ³n instalada.", executable);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = executable,
+                WorkingDirectory = directory,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Normal
+            });
         }
 
         private static void Uninstall()
@@ -300,10 +329,11 @@ namespace ChatGPTLiteInstaller
             return false;
         }
 
-        private static void WaitForApplicationExit()
+        private static bool WaitForApplicationExit()
         {
-            for (int attempt = 0; attempt < 100 && IsApplicationRunning(); attempt++)
+            for (int attempt = 0; attempt < 200 && IsApplicationRunning(); attempt++)
                 System.Threading.Thread.Sleep(300);
+            return !IsApplicationRunning();
         }
 
         private static void CreateShortcut(string shortcutPath, string targetPath, string workingDirectory, string description)
