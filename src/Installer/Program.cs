@@ -9,15 +9,15 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("RPM Browser Lite Setup")]
 [assembly: AssemblyProduct("RPM Browser Lite")]
-[assembly: AssemblyVersion("2.8.22.0")]
-[assembly: AssemblyFileVersion("2.8.22.0")]
+[assembly: AssemblyVersion("2.8.23.0")]
+[assembly: AssemblyFileVersion("2.8.23.0")]
 
 namespace ChatGPTLiteInstaller
 {
     internal static class Program
     {
         internal const string ProductName = "RPM Browser Lite";
-        private const string ProductVersion = "2.8.22";
+        private const string ProductVersion = "2.8.23";
         private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM Browser Lite";
         private const string LegacyProductName = "ChatGPT Lite";
         private static readonly string[] PayloadFiles = new string[]
@@ -394,6 +394,7 @@ namespace ChatGPTLiteInstaller
 
             _desktop = new CheckBox();
             _desktop.Text = "Crear acceso directo en el escritorio";
+            _desktop.Checked = true;
             _desktop.AutoSize = true;
             _desktop.Location = new Point(38, 202);
 

@@ -2421,7 +2421,9 @@ namespace ChatGPTLite
             // let LayoutToolbar decide which complete actions fit or move to More.
             string caption = GetToolbarCaption(accessibleLabel);
             int measuredWidth = TextRenderer.MeasureText(caption, button.Font).Width + 12;
-            button.Width = Math.Max(button.Width, Math.Min(92, measuredWidth));
+            // Keep a comfortable touch/keyboard target while allowing the overflow
+            // menu to take over complete actions on narrow windows.
+            button.Width = Math.Max(button.Width, Math.Max(44, Math.Min(104, measuredWidth)));
             button.AutoEllipsis = true;
             button.UseCompatibleTextRendering = false;
             SetToolbarButtonGlyph(button, button.Text);
@@ -3813,17 +3815,20 @@ namespace ChatGPTLite
             Button button = new Button();
             button.Text = text;
             button.Width = width;
-            button.Height = 46;
+            button.Height = 50;
             button.Top = 2;
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
             button.BackColor = Color.Transparent;
-            button.Font = new Font("Segoe UI", 7.5f, FontStyle.Regular);
+            button.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
             button.TextAlign = ContentAlignment.BottomCenter;
             button.TextImageRelation = TextImageRelation.ImageAboveText;
             button.ImageAlign = ContentAlignment.TopCenter;
             button.Padding = new Padding(0, 1, 0, 0);
             button.Cursor = Cursors.Hand;
+            button.AccessibleRole = AccessibleRole.PushButton;
+            button.TabStop = true;
+            button.AutoEllipsis = true;
             return button;
         }
 
@@ -3836,7 +3841,7 @@ namespace ChatGPTLite
             _toolbarGlyphs[button] = actualGlyph;
             Image previous = button.Image;
             button.Image = button == _appearanceButton
-                ? IconVisuals.CreateImageBitmap(Record, 30, 25) ?? CreateToolbarGlyphImage(actualGlyph, button.ForeColor)
+                ? IconVisuals.CreateImageBitmap(Record, 32, 28) ?? CreateToolbarGlyphImage(actualGlyph, button.ForeColor)
                 : CreateToolbarGlyphImage(actualGlyph, button.ForeColor);
             if (previous != null)
                 previous.Dispose();
@@ -3845,9 +3850,9 @@ namespace ChatGPTLite
 
         private static Bitmap CreateToolbarGlyphImage(string glyph, Color color)
         {
-            Bitmap image = new Bitmap(30, 25, PixelFormat.Format32bppArgb);
+            Bitmap image = new Bitmap(32, 28, PixelFormat.Format32bppArgb);
             using (Graphics graphics = Graphics.FromImage(image))
-            using (Font font = new Font("Segoe UI Symbol", 16f, FontStyle.Regular, GraphicsUnit.Point))
+            using (Font font = new Font("Segoe UI Symbol", 17.5f, FontStyle.Regular, GraphicsUnit.Point))
             {
                 graphics.Clear(Color.Transparent);
                 TextRenderer.DrawText(

@@ -363,6 +363,20 @@ namespace ChatGPTLite
             _windowPreview.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkInput : Color.White;
         }
 
+        public void FocusSearch()
+        {
+            if (IsDisposed || Disposing || _searchBox == null || _searchBox.IsDisposed)
+                return;
+            BeginInvoke((MethodInvoker)delegate
+            {
+                if (!IsDisposed && !Disposing && _searchBox != null && !_searchBox.IsDisposed)
+                {
+                    _searchBox.Focus();
+                    _searchBox.SelectAll();
+                }
+            });
+        }
+
         public void RefreshContent()
         {
             if (IsDisposed || Disposing || _windowsList == null || _windowsList.IsDisposed)
