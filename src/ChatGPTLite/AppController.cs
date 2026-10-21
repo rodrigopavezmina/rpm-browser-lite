@@ -24,8 +24,9 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.20";
-        public const string DefaultUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
+        public const string ProductVersion = "2.8.21";
+        public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
+        private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
         private readonly AppPaths _paths;
         private readonly string _pipeName;
@@ -63,7 +64,9 @@ namespace ChatGPTLite
                 // Existing installations created before the built-in update channel
                 // had an empty manifest URL. Keep their opt-in automatic updates
                 // working without requiring a manual configuration step.
-                if (State.Settings.AutomaticUpdates == true && string.IsNullOrWhiteSpace(State.Settings.UpdateManifestUrl))
+                if (State.Settings.AutomaticUpdates == true &&
+                    (string.IsNullOrWhiteSpace(State.Settings.UpdateManifestUrl) ||
+                     string.Equals(State.Settings.UpdateManifestUrl.Trim(), LegacyUpdateManifestUrl, StringComparison.OrdinalIgnoreCase)))
                 {
                     State.Settings.UpdateManifestUrl = DefaultUpdateManifestUrl;
                     _defaultUpdateManifestApplied = true;
@@ -1341,12 +1344,14 @@ namespace ChatGPTLite
                 {
                     client.Headers[HttpRequestHeader.UserAgent] = "RPMBrowserLite/" + ProductVersion;
                     Uri manifestUri = new Uri(url);
-                    if (IsOfficialManifestUrl(manifestUri))
-                    {
-                        string separator = string.IsNullOrEmpty(manifestUri.Query) ? "?" : "&";
-                        manifestUri = new Uri(manifestUri + separator + "cb=" + DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
-                    }
                     json = await client.DownloadStringTaskAsync(manifestUri);
+                    if (IsOfficialApiManifestUrl(manifestUri))
+                    {
+                        GitHubContentEnvelope envelope = JsonStore.FromJson<GitHubContentEnvelope>(json);
+                        if (envelope == null || string.IsNullOrWhiteSpace(envelope.Content))
+                            throw new InvalidDataException("La respuesta del canal de actualizaciones no contiene el manifiesto.");
+                        json = Encoding.UTF8.GetString(Convert.FromBase64String(envelope.Content.Replace("\n", string.Empty).Replace("\r", string.Empty)));
+                    }
                 }
                 UpdateManifest manifest = JsonStore.FromJson<UpdateManifest>(json);
                 Version current = new Version(ProductVersion);
@@ -1385,12 +1390,17 @@ namespace ChatGPTLite
             }
         }
 
-        private static bool IsOfficialManifestUrl(Uri uri)
+        private static bool IsOfficialApiManifestUrl(Uri uri)
         {
             return uri != null &&
                    string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
-                   string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase) &&
-                   uri.AbsolutePath.EndsWith("/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(uri.Host, "api.github.com", StringComparison.OrdinalIgnoreCase) &&
+                   uri.AbsolutePath.EndsWith("/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private sealed class GitHubContentEnvelope
+        {
+            public string Content { get; set; }
         }
 
         public void QueueSave()

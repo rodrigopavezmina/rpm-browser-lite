@@ -1,6 +1,6 @@
 {
-  "version": "2.8.20",
-  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.20/RPM-Browser-Lite-Setup-2.8.20-x64.exe",
-  "notes": "TLS 1.2 update channel and cache-busted manifest checks, plus the stability fixes from 2.8.19.",
-  "sha256": "f2261f0656adb992af5b951811b9dffe3467bcbd2906e349f284f61f5fbb364d"
+  "version": "2.8.21",
+  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.21/RPM-Browser-Lite-Setup-2.8.21-x64.exe",
+  "notes": "Canal de actualizaciones basado en la API oficial de GitHub, con TLS 1.2 y arranque estable del administrador.",
+  "sha256": "64c9291e0224dda77ba05fbe508fde33cd3db608c9a178f642a2aadf3020e9b0"
 }
