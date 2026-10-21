@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -13,6 +14,9 @@ namespace ChatGPTLite
         [STAThread]
         private static void Main(string[] args)
         {
+            // GitHub and most modern update endpoints require TLS 1.2. Explicitly
+            // selecting it keeps the updater reliable on older Windows defaults.
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

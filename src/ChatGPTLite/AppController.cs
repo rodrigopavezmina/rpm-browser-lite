@@ -8,6 +8,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Net;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -23,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.19";
+        public const string ProductVersion = "2.8.20";
         public const string DefaultUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
         private readonly AppPaths _paths;
@@ -1339,7 +1340,13 @@ namespace ChatGPTLite
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.UserAgent] = "RPMBrowserLite/" + ProductVersion;
-                    json = await client.DownloadStringTaskAsync(new Uri(url));
+                    Uri manifestUri = new Uri(url);
+                    if (IsOfficialManifestUrl(manifestUri))
+                    {
+                        string separator = string.IsNullOrEmpty(manifestUri.Query) ? "?" : "&";
+                        manifestUri = new Uri(manifestUri + separator + "cb=" + DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
+                    }
+                    json = await client.DownloadStringTaskAsync(manifestUri);
                 }
                 UpdateManifest manifest = JsonStore.FromJson<UpdateManifest>(json);
                 Version current = new Version(ProductVersion);
@@ -1376,6 +1383,14 @@ namespace ChatGPTLite
                 if (userInitiated)
                     MessageBox.Show("No se pudo comprobar la actualización.\r\n\r\n" + ex.Message, "Actualizaciones", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        private static bool IsOfficialManifestUrl(Uri uri)
+        {
+            return uri != null &&
+                   string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase) &&
+                   uri.AbsolutePath.EndsWith("/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json", StringComparison.OrdinalIgnoreCase);
         }
 
         public void QueueSave()
