@@ -7,3 +7,10 @@
 **/obj/
 *.user
 *.suo
+
+# Datos locales y sesiones: nunca subir credenciales, cookies o notas.
+estado.json
+Data/
+Capturas/
+Notas/
+*.rtf
