@@ -37,7 +37,14 @@ namespace ChatGPTLite
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(620, 1030);
+            // Keep the compact dialog usable on 768px-tall screens. The options
+            // content is longer than a typical laptop display, so make the form
+            // scrollable instead of allowing its Save/Cancel buttons to fall below
+            // the desktop work area.
+            AutoScroll = true;
+            int workHeight = Screen.PrimaryScreen == null ? 900 : Screen.PrimaryScreen.WorkingArea.Height;
+            ClientSize = new Size(620, Math.Min(1030, Math.Max(600, workHeight - 80)));
+            AutoScrollMinSize = new Size(620, 1040);
             Font = new Font("Segoe UI", 9f);
 
             Label heading = new Label();

@@ -23,7 +23,8 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.17";
+        public const string ProductVersion = "2.8.18";
+        public const string DefaultUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
         private readonly AppPaths _paths;
         private readonly string _pipeName;
@@ -57,6 +58,11 @@ namespace ChatGPTLite
             {
                 State = JsonStore.Load<AppState>(_paths.StateFile) ?? AppState.CreateDefault();
                 State.RepairDefaults();
+                // Existing installations created before the built-in update channel
+                // had an empty manifest URL. Keep their opt-in automatic updates
+                // working without requiring a manual configuration step.
+                if (State.Settings.AutomaticUpdates == true && string.IsNullOrWhiteSpace(State.Settings.UpdateManifestUrl))
+                    State.Settings.UpdateManifestUrl = DefaultUpdateManifestUrl;
             }
             catch (Exception ex)
             {

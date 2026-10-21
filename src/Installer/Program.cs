@@ -9,15 +9,15 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("RPM Browser Lite Setup")]
 [assembly: AssemblyProduct("RPM Browser Lite")]
-[assembly: AssemblyVersion("2.8.17.0")]
-[assembly: AssemblyFileVersion("2.8.17.0")]
+[assembly: AssemblyVersion("2.8.18.0")]
+[assembly: AssemblyFileVersion("2.8.18.0")]
 
 namespace ChatGPTLiteInstaller
 {
     internal static class Program
     {
         internal const string ProductName = "RPM Browser Lite";
-        private const string ProductVersion = "2.8.17";
+        private const string ProductVersion = "2.8.18";
         private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM Browser Lite";
         private const string LegacyProductName = "ChatGPT Lite";
         private static readonly string[] PayloadFiles = new string[]

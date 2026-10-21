@@ -1983,6 +1983,10 @@ namespace ChatGPTLite
         {
             // Keep temporary consultations deliberately separate from the full browser interface.
             _toolbar.Height = 38;
+            // The temporary window does not need a second title such as
+            // "Refresh Quick Gemini · temporary consultation" in its native chrome.
+            // Keep the compact toolbar as the only visible header.
+            Text = string.Empty;
             _reloadButton.Tag = string.Empty;
             SetToolbarButtonGlyph(_reloadButton, "↻");
             _reloadButton.Height = 30;
@@ -2292,7 +2296,7 @@ namespace ChatGPTLite
         private string WindowTitle()
         {
             if (Record.IsQuickConsult)
-                return string.IsNullOrWhiteSpace(Record.CustomTitle) ? "Quick consultation" : Record.CustomTitle;
+                return string.Empty;
             string caption = DisplayTitle + " · " + AppController.ProductName;
             if (!string.IsNullOrWhiteSpace(Record.Identifier))
                 caption += " · " + Record.Identifier.Trim();
@@ -3265,31 +3269,14 @@ namespace ChatGPTLite
                     if (IsDisposed)
                         return;
                     bool saved = await TryDownloadFaviconAsync(BuildFaviconServiceUri(url), cachePath);
-                    if (!saved || IsDisposed || icon == null || icon.IsDisposed || !IsHandleCreated)
+                    if (!saved || IsDisposed || icon == null || icon.IsDisposed)
                         return;
-                    try
-                    {
-                        BeginInvoke((MethodInvoker)delegate
-                        {
-                            if (IsDisposed || icon.IsDisposed)
-                                return;
-                            Bitmap replacement = CreateStartCachedIcon(cachePath);
-                            if (replacement == null)
-                                return;
-                            Image previous = icon.Image;
-                            icon.Image = replacement;
-                            _startDashboardImages.Add(replacement);
-                            if (previous != null)
-                            {
-                                _startDashboardImages.Remove(previous);
-                                previous.Dispose();
-                            }
-                        });
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // The dashboard closed before the optional icon was ready.
-                    }
+                    // RefreshStartDashboard can run before the form is shown. The
+                    // continuation resumes on the WinForms UI context, so updating
+                    // the tile directly also works before a native handle exists.
+                    // Previously the !IsHandleCreated guard discarded the favicon
+                    // result and left the first dashboard showing only a letter.
+                    ReplaceStartTileIcon(icon, cachePath);
                 }
                 finally
                 {
@@ -3327,6 +3314,23 @@ namespace ChatGPTLite
             catch
             {
                 return null;
+            }
+        }
+
+        private void ReplaceStartTileIcon(PictureBox icon, string cachePath)
+        {
+            if (icon == null || icon.IsDisposed || IsDisposed || string.IsNullOrWhiteSpace(cachePath))
+                return;
+            Bitmap replacement = CreateStartCachedIcon(cachePath);
+            if (replacement == null)
+                return;
+            Image previous = icon.Image;
+            icon.Image = replacement;
+            _startDashboardImages.Add(replacement);
+            if (previous != null)
+            {
+                _startDashboardImages.Remove(previous);
+                previous.Dispose();
             }
         }
 

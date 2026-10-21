@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace ChatGPTLite
@@ -238,6 +240,10 @@ namespace ChatGPTLite
             _bookmarksList.Columns.Add("Title", 340);
             _bookmarksList.Columns.Add("Address", 370);
             _bookmarksList.Columns.Add("Added", 150);
+            _bookmarksList.AllowDrop = true;
+            _bookmarksList.DragEnter += BookmarkDragEnter;
+            _bookmarksList.DragOver += BookmarkDragEnter;
+            _bookmarksList.DragDrop += BookmarkDragDrop;
             _bookmarksList.DoubleClick += delegate { OpenSelectedBookmark(); };
             _bookmarksList.KeyDown += delegate(object sender, KeyEventArgs args)
             {
@@ -713,9 +719,17 @@ namespace ChatGPTLite
             if (IsDisposed || Disposing || owner == null || owner.IsDisposed)
                 return;
             if (_moreMenu != null && !_moreMenu.IsDisposed)
-                _moreMenu.Dispose();
+                _moreMenu.Close();
+            _moreMenu = null;
             ContextMenuStrip menu = new ContextMenuStrip();
             _moreMenu = menu;
+            menu.Closed += delegate
+            {
+                if (ReferenceEquals(_moreMenu, menu))
+                    _moreMenu = null;
+                if (!menu.IsDisposed)
+                    menu.Dispose();
+            };
             menu.Items.Add("☾ Hibernate inactive", null, async delegate { await _app.HibernateInactiveWindowsAsync(); RefreshContent(); });
             menu.Items.Add("✦ Title, ID and icon…", null, delegate { CustomizeSelected(); });
             menu.Items.Add("✎ Show notes", null, delegate { ShowNotesSelected(); });
@@ -727,7 +741,16 @@ namespace ChatGPTLite
                 _app.MoveSavedWindowsToRecycle(_app.SavedWindows);
                 RefreshContent();
             });
-            menu.Show(owner, new Point(0, owner.Height));
+            try
+            {
+                if (!IsDisposed && !Disposing && !owner.IsDisposed)
+                    menu.Show(owner, new Point(0, owner.Height));
+            }
+            catch (ObjectDisposedException)
+            {
+                if (!menu.IsDisposed)
+                    menu.Dispose();
+            }
         }
 
         private void CustomizeSelected()
@@ -900,6 +923,79 @@ namespace ChatGPTLite
                     MessageBox.Show("The bookmarks could not be exported.\r\n\r\n" + ex.Message, AppController.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
+        }
+
+        private static void BookmarkDragEnter(object sender, DragEventArgs args)
+        {
+            string url;
+            string title;
+            args.Effect = TryReadDroppedBookmark(args.Data, out url, out title)
+                ? DragDropEffects.Link
+                : DragDropEffects.None;
+        }
+
+        private void BookmarkDragDrop(object sender, DragEventArgs args)
+        {
+            string url;
+            string title;
+            if (!TryReadDroppedBookmark(args.Data, out url, out title))
+                return;
+            try
+            {
+                _app.AddBookmark(url, title);
+                RefreshContent();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, AppController.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private static bool TryReadDroppedBookmark(IDataObject data, out string url, out string title)
+        {
+            url = string.Empty;
+            title = string.Empty;
+            if (data == null)
+                return false;
+
+            string html = data.GetData(DataFormats.Html, false) as string;
+            if (!string.IsNullOrWhiteSpace(html))
+            {
+                Match anchor = Regex.Match(html, "<a[^>]+href\\s*=\\s*[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>(?<title>.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                if (anchor.Success)
+                {
+                    url = WebUtility.HtmlDecode(anchor.Groups["url"].Value).Trim();
+                    title = Regex.Replace(WebUtility.HtmlDecode(anchor.Groups["title"].Value), "<[^>]+>", string.Empty).Trim();
+                }
+            }
+
+            if (url.Length == 0)
+            {
+                string text = data.GetData(DataFormats.UnicodeText, false) as string;
+                if (string.IsNullOrWhiteSpace(text))
+                    text = data.GetData(DataFormats.Text, false) as string;
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    foreach (string line in text.Split(new char[] { '\r', '\n', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        Uri candidate;
+                        if (Uri.TryCreate(line.Trim(), UriKind.Absolute, out candidate) &&
+                            (candidate.Scheme == Uri.UriSchemeHttp || candidate.Scheme == Uri.UriSchemeHttps))
+                        {
+                            url = candidate.AbsoluteUri;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Uri parsed;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out parsed) ||
+                (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
+                return false;
+            if (string.IsNullOrWhiteSpace(title))
+                title = parsed.Host;
+            return true;
         }
 
         private BrowserWindow SelectedWindow()

@@ -171,7 +171,7 @@ namespace ChatGPTLite
             settings.HibernateAfterMinutes = 10;
             settings.RestoreWindows = true;
             settings.CacheSizeMb = 512;
-            settings.UpdateManifestUrl = string.Empty;
+            settings.UpdateManifestUrl = AppController.DefaultUpdateManifestUrl;
             settings.MinimizeToTray = true;
             settings.DarkMode = false;
             settings.CapturePreviewOnHibernate = true;
@@ -195,7 +195,7 @@ namespace ChatGPTLite
             if (CacheSizeMb < 64)
                 CacheSizeMb = 512;
             if (UpdateManifestUrl == null)
-                UpdateManifestUrl = string.Empty;
+                UpdateManifestUrl = AppController.DefaultUpdateManifestUrl;
             if (!AutomaticUpdates.HasValue)
                 AutomaticUpdates = true;
             if (!RestoreHibernatedOnlyOnClick.HasValue)
