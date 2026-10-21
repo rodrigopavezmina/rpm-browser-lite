@@ -139,6 +139,7 @@ namespace ChatGPTLite
 
             Text = WindowTitle();
             StartPosition = FormStartPosition.Manual;
+            AutoScaleMode = AutoScaleMode.Dpi;
             MinimumSize = record.IsQuickConsult ? new Size(560, 420) : new Size(560, 460);
             Size = new Size(record.Width, record.Height);
             Location = new Point(record.X, record.Y);

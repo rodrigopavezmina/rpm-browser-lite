@@ -33,6 +33,7 @@ namespace ChatGPTLite
             _app = app;
             Text = "Windows, history and bookmarks · " + AppController.ProductName;
             StartPosition = FormStartPosition.CenterScreen;
+            AutoScaleMode = AutoScaleMode.Dpi;
             MinimumSize = new Size(820, 440);
             Size = new Size(1020, 590);
             Font = new Font("Segoe UI", 9f);
@@ -367,14 +368,24 @@ namespace ChatGPTLite
         {
             if (IsDisposed || Disposing || _searchBox == null || _searchBox.IsDisposed)
                 return;
-            BeginInvoke((MethodInvoker)delegate
+            try
             {
-                if (!IsDisposed && !Disposing && _searchBox != null && !_searchBox.IsDisposed)
+                BeginInvoke((MethodInvoker)delegate
                 {
-                    _searchBox.Focus();
-                    _searchBox.SelectAll();
-                }
-            });
+                    if (!IsDisposed && !Disposing && _searchBox != null && !_searchBox.IsDisposed)
+                    {
+                        _searchBox.Focus();
+                        _searchBox.SelectAll();
+                    }
+                });
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+                // The manager can be closing while a tray click is being delivered.
+            }
         }
 
         public void RefreshContent()
@@ -1059,10 +1070,16 @@ namespace ChatGPTLite
             ListView list = new ListView();
             list.Dock = DockStyle.Fill;
             list.View = View.Details;
+            list.Font = new Font("Segoe UI", 9.5f);
             list.FullRowSelect = true;
             list.MultiSelect = true;
             list.HideSelection = false;
             list.BorderStyle = BorderStyle.None;
+            list.AccessibleRole = AccessibleRole.Table;
+            // A 1-pixel image with a 32-pixel height gives rows a comfortable
+            // touch target without changing the data model or drawing custom cells.
+            list.SmallImageList = new ImageList();
+            list.SmallImageList.ImageSize = new Size(1, 32);
             return list;
         }
 
@@ -1103,6 +1120,8 @@ namespace ChatGPTLite
             button.Cursor = Cursors.Hand;
             button.AutoEllipsis = true;
             button.UseCompatibleTextRendering = false;
+            button.AccessibleRole = AccessibleRole.PushButton;
+            button.TabStop = true;
             button.Text = text;
             return button;
         }

@@ -1,6 +1,6 @@
 {
-  "version": "2.8.23",
-  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.23/RPM-Browser-Lite-Setup-2.8.23-x64.exe",
-  "notes": "Interacción más cómoda, búsqueda enfocada al abrir el administrador y acceso directo creado por defecto.",
-  "sha256": "f23043d0538934e8c14280ebcb46fd0e1e6e4fc948447455b10915b0bc4c2691"
+  "version": "2.8.24",
+  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.24/RPM-Browser-Lite-Setup-2.8.24-x64.exe",
+  "notes": "Interfaz más cómoda en pantallas con DPI alto, filas táctiles y foco seguro del administrador.",
+  "sha256": "e18e05a2c633eda19c7665b5c8f61ade6e639c52f61d2076c0ca1376ee0e668a"
 }

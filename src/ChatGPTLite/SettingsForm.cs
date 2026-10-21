@@ -34,6 +34,7 @@ namespace ChatGPTLite
             _app = app;
             Text = "Options · " + AppController.ProductName;
             StartPosition = FormStartPosition.CenterScreen;
+            AutoScaleMode = AutoScaleMode.Dpi;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
