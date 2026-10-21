@@ -1,6 +1,6 @@
 {
-  "version": "2.8.18",
-  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.18/RPM-Browser-Lite-Setup-2.8.18-x64.exe",
+  "version": "2.8.19",
+  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.19/RPM-Browser-Lite-Setup-2.8.19-x64.exe",
   "notes": "Favicon refresh, safer manager menus, scrollable options, bookmark drag-and-drop and built-in update channel.",
-  "sha256": "4732cad53d2419eea2e47b22d3495a3be2564ba37c92936771b01fc861c2d0be"
+  "sha256": "16ed6ebbc315c4d4f477cb5c78dfe7acbc647091b0bd259fb965bb0b4ccdc28d"
 }

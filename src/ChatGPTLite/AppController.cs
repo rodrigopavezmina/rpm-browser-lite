@@ -23,7 +23,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.18";
+        public const string ProductVersion = "2.8.19";
         public const string DefaultUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
         private readonly AppPaths _paths;
@@ -42,6 +42,7 @@ namespace ChatGPTLite
         private bool _exiting;
         private bool _bookmarkBatch;
         private bool _bulkHibernateRunning;
+        private bool _defaultUpdateManifestApplied;
 
         public AppState State { get; private set; }
         public AppPaths Paths { get { return _paths; } }
@@ -62,7 +63,10 @@ namespace ChatGPTLite
                 // had an empty manifest URL. Keep their opt-in automatic updates
                 // working without requiring a manual configuration step.
                 if (State.Settings.AutomaticUpdates == true && string.IsNullOrWhiteSpace(State.Settings.UpdateManifestUrl))
+                {
                     State.Settings.UpdateManifestUrl = DefaultUpdateManifestUrl;
+                    _defaultUpdateManifestApplied = true;
+                }
             }
             catch (Exception ex)
             {
@@ -80,6 +84,8 @@ namespace ChatGPTLite
                 _saveTimer.Stop();
                 SaveNow();
             };
+            if (_defaultUpdateManifestApplied)
+                QueueSave();
 
             _libraryRefreshTimer = new System.Windows.Forms.Timer();
             _libraryRefreshTimer.Interval = 250;
