@@ -1,6 +1,6 @@
 {
-  "version": "2.8.25",
-  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.25/RPM-Browser-Lite-Setup-2.8.25-x64.exe",
-  "notes": "Instalación atómica, espera segura de la versión anterior y apertura confiable tras actualizar.",
-  "sha256": "0A406F9E7E75265BE58554A4C2B7C3C05895295BD5FAEBC44B60A26DC68E3425"
+  "version": "2.8.26",
+  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.26/RPM-Browser-Lite-Setup-2.8.26-x64.exe",
+  "notes": "Acciones rápidas para TickTick: mover la tarea seleccionada a mañana o una semana.",
+  "sha256": "71C112C9014AD8EFDB3E52790142026CE8A06713500EFD16B0E327AAABB15598"
 }

@@ -1,6 +1,6 @@
 param(
     [switch]$SkipInstaller,
-    [string]$ArtifactLabel = '2.8.25',
+    [string]$ArtifactLabel = '2.8.26',
     [string]$BuildFolder = 'build'
 )
 

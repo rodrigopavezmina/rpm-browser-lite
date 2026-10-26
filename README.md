@@ -4,9 +4,9 @@ Navegador ligero para Windows pensado para mantener muchas páginas, cuentas y p
 
 ## Descargar
 
-- [Instalador Windows x64 2.8.25](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.25/RPM-Browser-Lite-Setup-2.8.25-x64.exe)
-- [Versión portable x64 2.8.25](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.25/RPM-Browser-Lite-Portable-2.8.25-x64.zip)
-- [Notas de la versión 2.8.25](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.25)
+- [Instalador Windows x64 2.8.26](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.26/RPM-Browser-Lite-Setup-2.8.26-x64.exe)
+- [Versión portable x64 2.8.26](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.26/RPM-Browser-Lite-Portable-2.8.26-x64.zip)
+- [Notas de la versión 2.8.26](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.26)
 
 El instalador crea un acceso directo en el Escritorio y en el menú Inicio. Las actualizaciones verifican SHA-256, esperan el cierre de la versión anterior, escriben los archivos de forma atómica y abren el administrador al terminar.
 
@@ -20,6 +20,7 @@ El instalador crea un acceso directo en el Escritorio y en el menú Inicio. Las 
 - **Hibernated** libera el WebView2 y conserva estado, historial y una vista previa local.
 - Las sesiones y cookies se conservan en el perfil local de WebView2; la aplicación no solicita ni registra contraseñas ni claves API.
 - Las ventanas admiten ID, título, emoji, color, notas RTF, marcadores, captura de página y búsqueda rápida.
+- En TickTick aparecen acciones rápidas para aplazar la tarea seleccionada a mañana o una semana.
 
 El modo portable guarda su información en una carpeta `Data` junto a `RPMBrowserLite.exe`. La instalación normal usa `%LOCALAPPDATA%\ChatGPT Lite` para conservar sesiones, ventanas y notas entre actualizaciones.
 
@@ -35,7 +36,7 @@ La compilación usa el compilador de .NET Framework y descarga automáticamente 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\build.ps1 -ArtifactLabel 2.8.25 -BuildFolder build-2.8.25
+.\build.ps1 -ArtifactLabel 2.8.26 -BuildFolder build-2.8.26
 ```
 
 Los archivos generados quedan en `artifacts\` (instalador, portable y `SHA256SUMS`). Las carpetas `build-*`, `artifacts`, `.packages`, `bin` y `obj` están excluidas del repositorio para no subir binarios temporales ni dependencias descargadas.

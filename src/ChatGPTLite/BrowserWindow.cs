@@ -56,6 +56,8 @@ namespace ChatGPTLite
         private readonly Button _downloadsButton;
         private readonly Button _copyModeButton;
         private readonly Button _cloneButton;
+        private readonly Button _tickTickTomorrowButton;
+        private readonly Button _tickTickNextWeekButton;
         private readonly Button _newBookmarkButton;
         private readonly Button _appearanceButton;
         private readonly Button _notesButton;
@@ -107,12 +109,38 @@ namespace ChatGPTLite
         private bool _caffeinePulsePhase;
         private bool _hibernatePulsePhase;
         private bool _copyModeEnabled;
+        private bool _tickTickPageActive;
         private bool _startDashboardVisible;
         private bool _startAddressEditPrepared;
         private int _startDashboardSecondsRemaining;
         private bool _faviconCaptureInProgress;
         private string _lastTitle;
         private Icon _presentationIcon;
+
+        private const string TickTickQuickActionsScript = @"
+(function(){
+  if(window.__rpmTickTickQuickActions)return;
+  window.__rpmTickTickQuickActions=function(action){
+    var host=(location.hostname||'').toLowerCase();
+    if(host!=='ticktick.com'&&host.slice(-13)!=='.ticktick.com')return;
+    var post=function(result){try{chrome.webview.postMessage('rpm-ticktick-action:'+action+':'+result);}catch(e){}};
+    var visible=function(el){if(!el||!el.getBoundingClientRect)return false;var r=el.getBoundingClientRect();return r.width>0&&r.height>0;};
+    var label=function(el){return ((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).replace(/\s+/g,' ').trim();};
+    var selected=document.querySelector('.task-item.selected,.task-item.active,[data-task-id].selected');
+    if(!selected){var marked=document.querySelectorAll('[aria-selected]');for(var i=0;i<marked.length;i++){if(marked[i].getAttribute('aria-selected')==='true'){selected=marked[i];break;}}}
+    if(!selected){post('no-selection');return;}
+    var controls=selected.querySelectorAll('button,[role=button],[aria-label]');
+    var opened=false;
+    for(var c=0;c<controls.length;c++){var controlLabel=label(controls[c]);if(visible(controls[c])&&/more|option|menu|mas|más/i.test(controlLabel)){controls[c].click();opened=true;break;}}
+    if(!opened){selected.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,view:window,clientX:selected.getBoundingClientRect().left+20,clientY:selected.getBoundingClientRect().top+20}));}
+    window.setTimeout(function(){
+      var pattern=action==='tomorrow'?/tomorrow|mañana|manana/i:/next week|pr[oó]xima semana|proxima semana/i;
+      var items=document.querySelectorAll('[role=menuitem],button,[role=option],[data-action]');
+      for(var j=0;j<items.length;j++){var itemLabel=label(items[j]);if(visible(items[j])&&pattern.test(itemLabel)){items[j].click();post('ok');return;}}
+      post('not-found');
+    },180);
+  };
+})();";
 
         public WindowRecord Record { get; private set; }
         public CoreWebView2 CoreWebView2 { get { return _webView == null ? null : _webView.CoreWebView2; } }
@@ -193,6 +221,8 @@ namespace ChatGPTLite
             _downloadsButton = CreateToolbarButton("⇩", 40);
             _copyModeButton = CreateToolbarButton("⧉", 40);
             _cloneButton = CreateToolbarButton("⧈", 40);
+            _tickTickTomorrowButton = CreateToolbarButton("☀", 40);
+            _tickTickNextWeekButton = CreateToolbarButton("＋7", 40);
             Button homeButton = CreateToolbarButton("⌂", 40);
             Button newButton = CreateToolbarButton("✚", 40);
             Button libraryButton = CreateToolbarButton("▦", 40);
@@ -264,6 +294,8 @@ namespace ChatGPTLite
             AddToolbarAction(recentButton, "◷ Recent conversations");
             AddToolbarSeparator();
             AddToolbarAction(captureButton, "▣ Capture full page as PNG");
+            AddToolbarAction(_tickTickTomorrowButton, "☀ TickTick: move selected task to tomorrow");
+            AddToolbarAction(_tickTickNextWeekButton, "＋7 TickTick: move selected task one week forward");
             _toolbar.Controls.Add(_menuButton);
             _toolbar.Controls.Add(_quickIdentifierBox);
             _toolbar.Controls.Add(_quickColorButton);
@@ -396,6 +428,8 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(_downloadsButton, "Open downloads (Ctrl+J)");
             _toolTip.SetToolTip(_copyModeButton, "Copy mode: allow selecting and copying text on this page");
             _toolTip.SetToolTip(_cloneButton, "Clone this window with the same page, title, ID, icon, color and notes");
+            _toolTip.SetToolTip(_tickTickTomorrowButton, "TickTick: move the selected task to tomorrow");
+            _toolTip.SetToolTip(_tickTickNextWeekButton, "TickTick: move the selected task one week forward");
             _toolTip.SetToolTip(_appearanceButton, "Click to choose an icon. Right-click for title, ID and advanced options.");
             _toolTip.SetToolTip(_quickColorButton, "Choose this window color");
             _toolTip.SetToolTip(_urlDragButton, "Drag this URL to the bookmarks bar or a folder in Google Chrome");
@@ -421,6 +455,8 @@ namespace ChatGPTLite
             _downloadsButton.Click += async delegate { await OpenDownloadsAsync(); };
             _copyModeButton.Click += async delegate { await ToggleCopyModeAsync(); };
             _cloneButton.Click += delegate { _app.CloneWindow(this, true); };
+            _tickTickTomorrowButton.Click += async delegate { await RunTickTickQuickActionAsync("tomorrow"); };
+            _tickTickNextWeekButton.Click += async delegate { await RunTickTickQuickActionAsync("next-week"); };
             _appearanceButton.Click += delegate { ShowCustomization(); };
             _appearanceButton.MouseUp += delegate(object sender, MouseEventArgs args)
             {
@@ -558,6 +594,7 @@ namespace ChatGPTLite
                 _app.OnWindowClosed(this, _closingForExit);
             };
 
+            _tickTickPageActive = IsTickTickPage();
             ApplyPresentation();
             LoadHibernatePreview();
             UpdateResourceUi();
@@ -1579,6 +1616,67 @@ namespace ChatGPTLite
             }
         }
 
+        private async Task RunTickTickQuickActionAsync(string action)
+        {
+            if (!_tickTickPageActive || CoreWebView2 == null)
+            {
+                _statusLabel.Text = "TickTick: abre una página de TickTick y selecciona una tarea.";
+                return;
+            }
+
+            try
+            {
+                MarkUserActivity();
+                _statusLabel.Text = action == "tomorrow"
+                    ? "TickTick: moviendo a mañana…"
+                    : "TickTick: moviendo una semana…";
+                await CoreWebView2.ExecuteScriptAsync(
+                    "if(window.__rpmTickTickQuickActions){window.__rpmTickTickQuickActions('" + action + "');}");
+            }
+            catch (Exception ex)
+            {
+                _statusLabel.Text = "TickTick: no se pudo ejecutar la acción";
+                _app.Log("No se pudo ejecutar la acción rápida de TickTick", ex);
+            }
+        }
+
+        private void HandleTickTickActionMessage(string message)
+        {
+            string[] parts = (message ?? string.Empty).Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 3)
+                return;
+
+            string action = parts[1];
+            string result = parts[2];
+            if (string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
+            {
+                _statusLabel.Text = action == "tomorrow"
+                    ? "TickTick: tarea aplazada a mañana"
+                    : "TickTick: tarea aplazada una semana";
+            }
+            else if (string.Equals(result, "no-selection", StringComparison.OrdinalIgnoreCase))
+                _statusLabel.Text = "TickTick: selecciona una tarea primero";
+            else
+                _statusLabel.Text = "TickTick: no apareció la opción; revisa el menú de la tarea";
+        }
+
+        private bool IsTickTickPage()
+        {
+            string url = CoreWebView2 == null ? Record.Url : CoreWebView2.Source;
+            Uri uri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out uri))
+                return false;
+            string host = uri.Host ?? string.Empty;
+            return string.Equals(host, "ticktick.com", StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith(".ticktick.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void UpdateTickTickActions()
+        {
+            _tickTickPageActive = IsTickTickPage();
+            LayoutToolbar();
+        }
+
         private async Task InitializeBrowserAsync(bool navigate)
         {
             _sleepPanel.Visible = true;
@@ -1671,6 +1769,8 @@ namespace ChatGPTLite
                 string message = args.TryGetWebMessageAsString();
                 if (string.Equals(message, "rpm-browser-user-activity", StringComparison.Ordinal))
                     MarkUserActivity();
+                else if (message != null && message.StartsWith("rpm-ticktick-action:", StringComparison.Ordinal))
+                    HandleTickTickActionMessage(message);
             };
             await core.AddScriptToExecuteOnDocumentCreatedAsync(
                 "(function(){var send=function(){try{chrome.webview.postMessage('rpm-browser-user-activity');}catch(e){}};" +
@@ -1686,6 +1786,7 @@ namespace ChatGPTLite
                 "var allow=function(e){if(window.__rpmCopyMode)e.stopImmediatePropagation();};" +
                 "document.addEventListener('selectstart',allow,true);document.addEventListener('copy',allow,true);" +
                 "document.addEventListener('cut',allow,true);document.addEventListener('contextmenu',allow,true);})();");
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(TickTickQuickActionsScript);
 
             core.FaviconChanged += async delegate
             {
@@ -1707,6 +1808,7 @@ namespace ChatGPTLite
             };
             core.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs args)
             {
+                UpdateTickTickActions();
                 UpdateNavigationButtons();
                 if (!args.IsSuccess)
                     _statusLabel.Text = "Could not load · click ↻ to retry";
@@ -1726,6 +1828,7 @@ namespace ChatGPTLite
             {
                 if (!string.IsNullOrWhiteSpace(core.Source))
                     Record.Url = core.Source;
+                UpdateTickTickActions();
                 if (_addressBox != null && !_addressBox.Focused &&
                     !string.Equals(_addressBox.Text, Record.Url, StringComparison.Ordinal))
                     _addressBox.Text = Record.Url;
@@ -2363,6 +2466,8 @@ namespace ChatGPTLite
             menu.Items.Add(new ToolStripSeparator());
             foreach (Button button in _toolbarButtons)
             {
+                if ((button == _tickTickTomorrowButton || button == _tickTickNextWeekButton) && !_tickTickPageActive)
+                    continue;
                 if (button.Visible)
                     continue;
 
@@ -2471,7 +2576,12 @@ namespace ChatGPTLite
             int availableWidth = _toolbar.ClientSize.Width;
             int allToolbarWidth = 4;
             foreach (Control item in _toolbarItems)
+            {
+                Button action = item as Button;
+                if ((action == _tickTickTomorrowButton || action == _tickTickNextWeekButton) && !_tickTickPageActive)
+                    continue;
                 allToolbarWidth += item is Panel ? item.Width + 9 : item.Width + 2;
+            }
             allToolbarWidth += _quickIdentifierBox.Width + _quickColorButton.Width + 8;
 
             int minimumAddressWidth = _isHibernated ? 220 : 180;
@@ -2503,7 +2613,9 @@ namespace ChatGPTLite
 
                 Button button = item as Button;
                 bool isAppearance = button == _appearanceButton;
-                bool visible = left + button.Width + (isAppearance ? _quickIdentifierBox.Width + _quickColorButton.Width + 8 : 0) <= actionsLimit;
+                bool isTickTickAction = button == _tickTickTomorrowButton || button == _tickTickNextWeekButton;
+                bool visible = (!isTickTickAction || _tickTickPageActive) &&
+                    left + button.Width + (isAppearance ? _quickIdentifierBox.Width + _quickColorButton.Width + 8 : 0) <= actionsLimit;
                 button.Visible = visible;
                 if (visible)
                 {
@@ -3901,6 +4013,10 @@ namespace ChatGPTLite
                 return "Recent";
             if (accessibleLabel.IndexOf("Capture full page", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Capture";
+            if (accessibleLabel.IndexOf("TickTick: move selected task to tomorrow", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Tomorrow";
+            if (accessibleLabel.IndexOf("TickTick: move selected task one week forward", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "+1 week";
             if (accessibleLabel.IndexOf("Check for updates", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Update";
             if (accessibleLabel.IndexOf("Exit completely", StringComparison.OrdinalIgnoreCase) >= 0)
