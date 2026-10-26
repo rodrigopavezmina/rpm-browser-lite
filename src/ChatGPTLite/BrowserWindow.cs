@@ -1618,7 +1618,7 @@ namespace ChatGPTLite
 
         private async Task RunTickTickQuickActionAsync(string action)
         {
-            if (!_tickTickPageActive || CoreWebView2 == null)
+            if (!_tickTickPageActive)
             {
                 _statusLabel.Text = "TickTick: abre una página de TickTick y selecciona una tarea.";
                 return;
@@ -1626,6 +1626,12 @@ namespace ChatGPTLite
 
             try
             {
+                await EnsureBrowserReadyAsync(true);
+                if (CoreWebView2 == null)
+                {
+                    _statusLabel.Text = "TickTick: la página todavía se está restaurando";
+                    return;
+                }
                 MarkUserActivity();
                 _statusLabel.Text = action == "tomorrow"
                     ? "TickTick: moviendo a mañana…"
