@@ -144,9 +144,9 @@ namespace ChatGPTLite
     var selected=document.querySelector('[aria-selected=true],[data-selected=true],.task-item.selected,.task-item.active,[data-task-id].selected,[data-task-id][aria-current=true]');
     if(selected)selectedTask=selected;
     if(selectedTask)return selectedTask;
-    var editor=document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]');
     var right=document.querySelector('#right-view,[id$=right-view],[id*=right-view]');
-    var source=editor||right;
+    var editor=document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]');
+    var source=right||editor;
     if(source){
       var sourceText=label(source);
       var candidates=document.querySelectorAll('[data-task-id],.task-item,.taskItem,.task-list-item,[role=listitem],li');
@@ -193,7 +193,7 @@ namespace ChatGPTLite
     return false;
   };
   var openDateEditor=function(){
-    var root=document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]')||document.querySelector('#right-view,[id$=right-view],[id*=right-view]');
+    var root=document.querySelector('#right-view,[id$=right-view],[id*=right-view]')||document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]');
     var quick=root&&root.querySelector('#quick-set,[id*=quick-set]');
     if(quick&&visible(quick)){quick.click();return true;}
     var task=findSelectedTask(), context=task||root;

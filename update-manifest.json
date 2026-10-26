@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.30",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.30/RPM-Browser-Lite-Setup-2.8.30-x64.exe",
-    "notes":  "Corrección de acciones TickTick: usa la tarea abierta y su selector de fecha; panel arriba a la derecha.",
-    "sha256":  "E2BB39C518C06B846F7F9AB775F13FEFC5E170CC1EB14126D5F100D61A969BCB"
+    "version":  "2.8.31",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.31/RPM-Browser-Lite-Setup-2.8.31-x64.exe",
+    "notes":  "Corrección TickTick: usa la tarea abierta y el selector quick-set de fecha; panel arriba a la derecha.",
+    "sha256":  "67C93784BA342371891691BA50ED2173A90BED8791457BA71D0A63A6D514A51F"
 }
