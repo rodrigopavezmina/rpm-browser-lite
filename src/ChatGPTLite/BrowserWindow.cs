@@ -119,33 +119,67 @@ namespace ChatGPTLite
 
         private const string TickTickQuickActionsScript = @"
 (function(){
-  if(window.__rpmTickTickQuickActions)return;
-  window.__rpmTickTickQuickActions=function(action){
-    var host=(location.hostname||'').toLowerCase();
-    if(host!=='ticktick.com'&&host.slice(-13)!=='.ticktick.com')return;
-    var post=function(result){try{chrome.webview.postMessage('rpm-ticktick-action:'+action+':'+result);}catch(e){}};
-    var visible=function(el){if(!el||!el.getBoundingClientRect)return false;var r=el.getBoundingClientRect();return r.width>0&&r.height>0;};
-    var label=function(el){return ((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).replace(/\s+/g,' ').trim();};
-    var selected=document.querySelector('.task-item.selected,.task-item.active,[data-task-id].selected');
-    if(!selected){var marked=document.querySelectorAll('[aria-selected]');for(var i=0;i<marked.length;i++){if(marked[i].getAttribute('aria-selected')==='true'){selected=marked[i];break;}}}
-    if(!selected){post('no-selection');return;}
-    var controls=selected.querySelectorAll('button,[role=button],[aria-label]');
+  if(window.__rpmTickTickInstalled)return;
+  window.__rpmTickTickInstalled=true;
+  var isTickTick=function(){var host=(location.hostname||'').toLowerCase();return host==='ticktick.com'||host.slice(-13)==='.ticktick.com';};
+  var selectedTask=null;
+  var visible=function(el){if(!el||!el.getBoundingClientRect)return false;var r=el.getBoundingClientRect();return r.width>0&&r.height>0;};
+  var label=function(el){return ((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).replace(/\s+/g,' ').trim();};
+  var post=function(action,result){try{chrome.webview.postMessage('rpm-ticktick-action:'+action+':'+result);}catch(e){}};
+  var setStatus=function(text){var status=document.getElementById('rpm-ticktick-quick-status');if(status)status.textContent=text;};
+  var rememberTask=function(event){
+    if(!isTickTick())return;
+    var target=event.target;
+    if(target&&target.closest&&target.closest('#rpm-ticktick-quick-actions'))return;
+    var task=target&&target.closest?target.closest('[data-task-id],.task-item,.taskItem,[role=listitem]'):null;
+    if(task)selectedTask=task;
+  };
+  var findSelectedTask=function(){
+    if(selectedTask&&document.contains(selectedTask))return selectedTask;
+    var selected=document.querySelector('[aria-selected=true],[data-selected=true],.task-item.selected,.task-item.active,[data-task-id].selected');
+    if(selected)selectedTask=selected;
+    return selectedTask;
+  };
+  var run=function(action){
+    if(!isTickTick())return;
+    var task=findSelectedTask();
+    if(!task){setStatus('Selecciona una tarea');post(action,'no-selection');return;}
+    setStatus(action==='tomorrow'?'Aplicando mañana…':'+1 semana…');
+    var controls=task.querySelectorAll('button,[role=button],[aria-label]');
     var opened=false;
     for(var c=0;c<controls.length;c++){var controlLabel=label(controls[c]);if(visible(controls[c])&&/more|option|menu|mas|más/i.test(controlLabel)){controls[c].click();opened=true;break;}}
-    if(!opened){selected.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,view:window,clientX:selected.getBoundingClientRect().left+20,clientY:selected.getBoundingClientRect().top+20}));}
+    if(!opened){var box=task.getBoundingClientRect();task.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,view:window,clientX:box.left+20,clientY:box.top+20}));}
     window.setTimeout(function(){
       var pattern=action==='tomorrow'?/tomorrow|mañana|manana/i:/next week|pr[oó]xima semana|proxima semana/i;
       var items=document.querySelectorAll('[role=menuitem],[role=option],[data-action]');
-      for(var j=0;j<items.length;j++){var itemLabel=label(items[j]);if(visible(items[j])&&pattern.test(itemLabel)){items[j].click();post('ok');return;}}
+      for(var j=0;j<items.length;j++){var itemLabel=label(items[j]);if(visible(items[j])&&pattern.test(itemLabel)){items[j].click();setStatus('Listo');post(action,'ok');return;}}
       var buttons=document.querySelectorAll('button');
       for(var b=0;b<buttons.length;b++){
         var parent=buttons[b].closest('[role=menu],[role=listbox],[class*=menu],[class*=dropdown],[class*=popover],[class*=context]');
         var buttonLabel=label(buttons[b]);
-        if(parent&&visible(buttons[b])&&pattern.test(buttonLabel)){buttons[b].click();post('ok');return;}
+        if(parent&&visible(buttons[b])&&pattern.test(buttonLabel)){buttons[b].click();setStatus('Listo');post(action,'ok');return;}
       }
-      post('not-found');
-    },180);
+      setStatus('Abre el menú de la tarea');post(action,'not-found');
+    },300);
   };
+  window.__rpmTickTickQuickActions=run;
+  document.addEventListener('click',rememberTask,true);
+  var install=function(){
+    if(!isTickTick()||!document.body||document.getElementById('rpm-ticktick-quick-actions'))return;
+    var panel=document.createElement('div');panel.id='rpm-ticktick-quick-actions';
+    panel.innerHTML='<span class=""rpm-ticktick-caption"">RPM</span><button type=""button"" data-rpm-action=""tomorrow"">☀ Mañana</button><button type=""button"" data-rpm-action=""next-week"">＋1 semana</button><span id=""rpm-ticktick-quick-status""></span>';
+    var style=document.createElement('style');style.textContent='#rpm-ticktick-quick-actions{position:fixed;right:18px;bottom:18px;z-index:2147483647;display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:12px;background:rgba(25,29,36,.94);box-shadow:0 6px 22px rgba(0,0,0,.28);font:12px Segoe UI,Arial,sans-serif;color:#f5f7fa}#rpm-ticktick-quick-actions button{border:0;border-radius:8px;padding:7px 10px;background:#4b73b8;color:white;cursor:pointer;font:inherit}#rpm-ticktick-quick-actions button:hover{background:#638bd0}#rpm-ticktick-quick-actions .rpm-ticktick-caption{font-weight:700;opacity:.8}#rpm-ticktick-quick-actions #rpm-ticktick-quick-status{min-width:90px;opacity:.82}';
+    (document.head||document.documentElement).appendChild(style);document.body.appendChild(panel);
+    panel.querySelectorAll('button[data-rpm-action]').forEach(function(button){button.addEventListener('click',function(){run(button.getAttribute('data-rpm-action'));});});
+  };
+  var installScheduled=false;
+  var scheduleInstall=function(){if(installScheduled)return;installScheduled=true;window.setTimeout(function(){installScheduled=false;install();},80);};
+  var observePage=function(){
+    if(!document.documentElement||window.__rpmTickTickObserver)return;
+    window.__rpmTickTickObserver=new MutationObserver(function(){if(isTickTick()&&!document.getElementById('rpm-ticktick-quick-actions'))scheduleInstall();});
+    window.__rpmTickTickObserver.observe(document.documentElement,{childList:true,subtree:true});
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scheduleInstall();observePage();});else{scheduleInstall();observePage();}
 })();";
 
         public WindowRecord Record { get; private set; }

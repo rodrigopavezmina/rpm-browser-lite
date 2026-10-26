@@ -1,6 +1,6 @@
-{
-  "version": "2.8.28",
-  "downloadUrl": "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.28/RPM-Browser-Lite-Setup-2.8.28-x64.exe",
-  "notes": "Acciones rápidas para TickTick: mover la tarea seleccionada a mañana o una semana.",
-  "sha256": "D5C38307912C706E6540397861E0226B5805EBF9061B98D3B11C8FF149B68C7F"
+﻿{
+    "version":  "2.8.29",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.29/RPM-Browser-Lite-Setup-2.8.29-x64.exe",
+    "notes":  "Acciones rÃ¡pidas incrustadas dentro de TickTick para aplazar la tarea a maÃ±ana o una semana.",
+    "sha256":  "B847E8AD3D687C04C131A89BA3B3D6D89F75B842E0160625F3D161A8E7A1B62E"
 }
