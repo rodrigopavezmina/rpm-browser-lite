@@ -135,8 +135,14 @@ namespace ChatGPTLite
     if(!opened){selected.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,view:window,clientX:selected.getBoundingClientRect().left+20,clientY:selected.getBoundingClientRect().top+20}));}
     window.setTimeout(function(){
       var pattern=action==='tomorrow'?/tomorrow|mañana|manana/i:/next week|pr[oó]xima semana|proxima semana/i;
-      var items=document.querySelectorAll('[role=menuitem],button,[role=option],[data-action]');
+      var items=document.querySelectorAll('[role=menuitem],[role=option],[data-action]');
       for(var j=0;j<items.length;j++){var itemLabel=label(items[j]);if(visible(items[j])&&pattern.test(itemLabel)){items[j].click();post('ok');return;}}
+      var buttons=document.querySelectorAll('button');
+      for(var b=0;b<buttons.length;b++){
+        var parent=buttons[b].closest('[role=menu],[role=listbox],[class*=menu],[class*=dropdown],[class*=popover],[class*=context]');
+        var buttonLabel=label(buttons[b]);
+        if(parent&&visible(buttons[b])&&pattern.test(buttonLabel)){buttons[b].click();post('ok');return;}
+      }
       post('not-found');
     },180);
   };
