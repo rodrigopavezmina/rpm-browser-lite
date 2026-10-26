@@ -56,8 +56,6 @@ namespace ChatGPTLite
         private readonly Button _downloadsButton;
         private readonly Button _copyModeButton;
         private readonly Button _cloneButton;
-        private readonly Button _tickTickTomorrowButton;
-        private readonly Button _tickTickNextWeekButton;
         private readonly Button _newBookmarkButton;
         private readonly Button _appearanceButton;
         private readonly Button _notesButton;
@@ -109,131 +107,12 @@ namespace ChatGPTLite
         private bool _caffeinePulsePhase;
         private bool _hibernatePulsePhase;
         private bool _copyModeEnabled;
-        private bool _tickTickPageActive;
         private bool _startDashboardVisible;
         private bool _startAddressEditPrepared;
         private int _startDashboardSecondsRemaining;
         private bool _faviconCaptureInProgress;
         private string _lastTitle;
         private Icon _presentationIcon;
-
-        private const string TickTickQuickActionsScript = @"
-(function(){
-  if(window.__rpmTickTickInstalled)return;
-  window.__rpmTickTickInstalled=true;
-  var isTickTick=function(){var host=(location.hostname||'').toLowerCase();return host==='ticktick.com'||host.slice(-13)==='.ticktick.com';};
-  var selectedTask=null;
-  var visible=function(el){if(!el||!el.getBoundingClientRect)return false;var r=el.getBoundingClientRect();return r.width>0&&r.height>0;};
-  var label=function(el){return ((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).replace(/\s+/g,' ').trim();};
-  var popup=function(el){return !!(el&&el.closest&&el.closest('[role=menu],[role=listbox],[role=dialog],[role=grid],[class*=menu],[class*=dropdown],[class*=popover],[class*=dialog],[class*=picker],[class*=calendar]'));};
-  var post=function(action,result){try{chrome.webview.postMessage('rpm-ticktick-action:'+action+':'+result);}catch(e){}};
-  var setStatus=function(text){var status=document.getElementById('rpm-ticktick-quick-status');if(status)status.textContent=text;};
-  var rememberTask=function(event){
-    if(!isTickTick())return;
-    var target=event.target;
-    if(target&&target.closest&&target.closest('#rpm-ticktick-quick-actions'))return;
-    var task=target&&target.closest?target.closest('[data-task-id],.task-item,.taskItem,.task-list-item,[role=listitem],li'):null;
-    if(task)selectedTask=task;
-  };
-  var taskIdFromUrl=function(){var match=(location.href||'').match(/(?:tasks|task)[\\/]+([A-Za-z0-9_-]{8,})/i);return match?match[1]:'';};
-  var findByTaskId=function(id){if(!id)return null;var escaped=id.replace(/\\/g,'\\\\');try{return document.querySelector('[data-task-id='+escaped+'],[data-id='+escaped+']');}catch(e){return null;}};
-  var findSelectedTask=function(){
-    if(selectedTask&&document.contains(selectedTask))return selectedTask;
-    var byUrl=findByTaskId(taskIdFromUrl());
-    if(byUrl){selectedTask=byUrl;return selectedTask;}
-    var selected=document.querySelector('[aria-selected=true],[data-selected=true],.task-item.selected,.task-item.active,[data-task-id].selected,[data-task-id][aria-current=true]');
-    if(selected)selectedTask=selected;
-    if(selectedTask)return selectedTask;
-    var right=document.querySelector('#right-view,[id$=right-view],[id*=right-view]');
-    var editor=document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]');
-    var source=right||editor;
-    if(source){
-      var sourceText=label(source);
-      var candidates=document.querySelectorAll('[data-task-id],.task-item,.taskItem,.task-list-item,[role=listitem],li');
-      var best=null,bestScore=0;
-      for(var i=0;i<candidates.length;i++){
-        if(!visible(candidates[i]))continue;
-        var candidateText=label(candidates[i]);
-        if(!candidateText||candidateText.length<8)continue;
-        var words=candidateText.split(/\\s+/).filter(function(word){return word.length>=4;}).slice(0,8);
-        var score=0;
-        for(var w=0;w<words.length;w++){if(sourceText.indexOf(words[w])>=0)score++;}
-        if(score>bestScore){bestScore=score;best=candidates[i];}
-      }
-      if(best&&bestScore>=2)selectedTask=best;
-    }
-    return selectedTask;
-  };
-  var targetDate=function(action){var date=new Date();date.setHours(12,0,0,0);date.setDate(date.getDate()+(action==='tomorrow'?1:7));return date;};
-  var isoDate=function(date){return date.getFullYear().toString()+'-'+('0'+(date.getMonth()+1)).slice(-2)+'-'+('0'+date.getDate()).slice(-2);};
-  var dateWords=function(date){var months=['january','february','march','april','may','june','july','august','september','october','november','december'];var monthsEs=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];return [date.getDate().toString(),months[date.getMonth()],monthsEs[date.getMonth()],isoDate(date)];};
-  var clickDateOption=function(action){
-    var date=targetDate(action), iso=isoDate(date), words=dateWords(date);
-    var direct=action==='tomorrow'?/tomorrow|mañana|manana/i:/next week|pr[oó]xima semana|proxima semana/i;
-    var items=document.querySelectorAll('[role=menuitem],[role=option],[role=gridcell],[data-action],[data-date],button,a');
-    for(var i=0;i<items.length;i++){
-      var item=items[i], itemLabel=label(item), dataDate=item.getAttribute('data-date')||'';
-      if(!visible(item)||(!popup(item)&&!dataDate))continue;
-      if(direct.test(itemLabel)||(dataDate&&dataDate.indexOf(iso)>=0)){item.click();return true;}
-    }
-    var inputs=document.querySelectorAll('input[type=date],input[placeholder*=date],input[placeholder*=fecha],input[aria-label*=date],input[aria-label*=fecha]');
-    for(var j=0;j<inputs.length;j++){
-      if(!visible(inputs[j]))continue;
-      var setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
-      if(setter&&setter.set)setter.set.call(inputs[j],iso);else inputs[j].value=iso;
-      inputs[j].dispatchEvent(new Event('input',{bubbles:true}));inputs[j].dispatchEvent(new Event('change',{bubbles:true}));
-      inputs[j].dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}));
-      return true;
-    }
-    for(var k=0;k<items.length;k++){
-      var candidate=items[k], candidateLabel=label(candidate), candidateData=candidate.getAttribute('data-date')||'';
-      if(!visible(candidate)||!popup(candidate))continue;
-      if(candidateData.indexOf(iso)>=0||words.some(function(word){return candidateLabel.toLowerCase().indexOf(word.toLowerCase())>=0;})){candidate.click();return true;}
-    }
-    return false;
-  };
-  var openDateEditor=function(){
-    var root=document.querySelector('#right-view,[id$=right-view],[id*=right-view]')||document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor]');
-    var quick=root&&root.querySelector('#quick-set,[id*=quick-set]');
-    if(quick&&visible(quick)){quick.click();return true;}
-    var task=findSelectedTask(), context=task||root;
-    if(!context)return false;
-    var controls=context.querySelectorAll('button,[role=button],[aria-label],[title]');
-    for(var i=0;i<controls.length;i++){var controlLabel=label(controls[i]);if(visible(controls[i])&&/more|option|menu|mas|más|ellipsis|acciones/i.test(controlLabel)){controls[i].click();return true;}}
-    var box=context.getBoundingClientRect();context.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,view:window,clientX:box.left+20,clientY:box.top+20}));return true;
-  };
-  var run=function(action){
-    if(!isTickTick())return;
-    if(!findSelectedTask()&&!document.querySelector('#td-editor,[id$=td-editor],[id*=td-editor],#right-view,[id$=right-view],[id*=right-view]')){setStatus('Selecciona una tarea');post(action,'no-selection');return;}
-    setStatus(action==='tomorrow'?'Aplicando mañana…':'+1 semana…');
-    openDateEditor();
-    window.setTimeout(function(){
-      if(clickDateOption(action)){setStatus('Fecha actualizada');post(action,'ok');return;}
-      window.setTimeout(function(){
-        if(clickDateOption(action)){setStatus('Fecha actualizada');post(action,'ok');return;}
-        setStatus('No apareció el selector de fecha');post(action,'not-found');
-      },500);
-    },350);
-  };
-  window.__rpmTickTickQuickActions=run;
-  document.addEventListener('click',rememberTask,true);
-  var install=function(){
-    if(!isTickTick()||!document.body||document.getElementById('rpm-ticktick-quick-actions'))return;
-    var panel=document.createElement('div');panel.id='rpm-ticktick-quick-actions';
-    panel.innerHTML='<span class=""rpm-ticktick-caption"">RPM</span><button type=""button"" data-rpm-action=""tomorrow"">☀ Mañana</button><button type=""button"" data-rpm-action=""next-week"">＋1 semana</button><span id=""rpm-ticktick-quick-status""></span>';
-    var style=document.getElementById('rpm-ticktick-quick-style');if(!style){style=document.createElement('style');style.id='rpm-ticktick-quick-style';style.textContent='#rpm-ticktick-quick-actions{position:fixed;right:18px;top:18px;bottom:auto;z-index:2147483647;display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:12px;background:rgba(25,29,36,.94);box-shadow:0 6px 22px rgba(0,0,0,.28);font:12px Segoe UI,Arial,sans-serif;color:#f5f7fa}#rpm-ticktick-quick-actions button{border:0;border-radius:8px;padding:7px 10px;background:#4b73b8;color:white;cursor:pointer;font:inherit}#rpm-ticktick-quick-actions button:hover{background:#638bd0}#rpm-ticktick-quick-actions .rpm-ticktick-caption{font-weight:700;opacity:.8}#rpm-ticktick-quick-actions #rpm-ticktick-quick-status{min-width:125px;opacity:.82}';(document.head||document.documentElement).appendChild(style);}
-    document.body.appendChild(panel);
-    panel.querySelectorAll('button[data-rpm-action]').forEach(function(button){button.addEventListener('click',function(){run(button.getAttribute('data-rpm-action'));});});
-  };
-  var installScheduled=false;
-  var scheduleInstall=function(){if(installScheduled)return;installScheduled=true;window.setTimeout(function(){installScheduled=false;install();},80);};
-  var observePage=function(){
-    if(!document.documentElement||window.__rpmTickTickObserver)return;
-    window.__rpmTickTickObserver=new MutationObserver(function(){if(isTickTick()&&!document.getElementById('rpm-ticktick-quick-actions'))scheduleInstall();});
-    window.__rpmTickTickObserver.observe(document.documentElement,{childList:true,subtree:true});
-  };
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scheduleInstall();observePage();});else{scheduleInstall();observePage();}
-})();";
 
         public WindowRecord Record { get; private set; }
         public CoreWebView2 CoreWebView2 { get { return _webView == null ? null : _webView.CoreWebView2; } }
@@ -314,8 +193,6 @@ namespace ChatGPTLite
             _downloadsButton = CreateToolbarButton("⇩", 40);
             _copyModeButton = CreateToolbarButton("⧉", 40);
             _cloneButton = CreateToolbarButton("⧈", 40);
-            _tickTickTomorrowButton = CreateToolbarButton("☀", 40);
-            _tickTickNextWeekButton = CreateToolbarButton("＋7", 40);
             Button homeButton = CreateToolbarButton("⌂", 40);
             Button newButton = CreateToolbarButton("✚", 40);
             Button libraryButton = CreateToolbarButton("▦", 40);
@@ -387,8 +264,6 @@ namespace ChatGPTLite
             AddToolbarAction(recentButton, "◷ Recent conversations");
             AddToolbarSeparator();
             AddToolbarAction(captureButton, "▣ Capture full page as PNG");
-            AddToolbarAction(_tickTickTomorrowButton, "☀ TickTick: move selected task to tomorrow");
-            AddToolbarAction(_tickTickNextWeekButton, "＋7 TickTick: move selected task one week forward");
             _toolbar.Controls.Add(_menuButton);
             _toolbar.Controls.Add(_quickIdentifierBox);
             _toolbar.Controls.Add(_quickColorButton);
@@ -521,8 +396,6 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(_downloadsButton, "Open downloads (Ctrl+J)");
             _toolTip.SetToolTip(_copyModeButton, "Copy mode: allow selecting and copying text on this page");
             _toolTip.SetToolTip(_cloneButton, "Clone this window with the same page, title, ID, icon, color and notes");
-            _toolTip.SetToolTip(_tickTickTomorrowButton, "TickTick: move the selected task to tomorrow");
-            _toolTip.SetToolTip(_tickTickNextWeekButton, "TickTick: move the selected task one week forward");
             _toolTip.SetToolTip(_appearanceButton, "Click to choose an icon. Right-click for title, ID and advanced options.");
             _toolTip.SetToolTip(_quickColorButton, "Choose this window color");
             _toolTip.SetToolTip(_urlDragButton, "Drag this URL to the bookmarks bar or a folder in Google Chrome");
@@ -548,8 +421,6 @@ namespace ChatGPTLite
             _downloadsButton.Click += async delegate { await OpenDownloadsAsync(); };
             _copyModeButton.Click += async delegate { await ToggleCopyModeAsync(); };
             _cloneButton.Click += delegate { _app.CloneWindow(this, true); };
-            _tickTickTomorrowButton.Click += async delegate { await RunTickTickQuickActionAsync("tomorrow"); };
-            _tickTickNextWeekButton.Click += async delegate { await RunTickTickQuickActionAsync("next-week"); };
             _appearanceButton.Click += delegate { ShowCustomization(); };
             _appearanceButton.MouseUp += delegate(object sender, MouseEventArgs args)
             {
@@ -687,7 +558,6 @@ namespace ChatGPTLite
                 _app.OnWindowClosed(this, _closingForExit);
             };
 
-            _tickTickPageActive = IsTickTickPage();
             ApplyPresentation();
             LoadHibernatePreview();
             UpdateResourceUi();
@@ -1709,73 +1579,6 @@ namespace ChatGPTLite
             }
         }
 
-        private async Task RunTickTickQuickActionAsync(string action)
-        {
-            if (!_tickTickPageActive)
-            {
-                _statusLabel.Text = "TickTick: abre una página de TickTick y selecciona una tarea.";
-                return;
-            }
-
-            try
-            {
-                await EnsureBrowserReadyAsync(true);
-                if (CoreWebView2 == null)
-                {
-                    _statusLabel.Text = "TickTick: la página todavía se está restaurando";
-                    return;
-                }
-                MarkUserActivity();
-                _statusLabel.Text = action == "tomorrow"
-                    ? "TickTick: moviendo a mañana…"
-                    : "TickTick: moviendo una semana…";
-                await CoreWebView2.ExecuteScriptAsync(
-                    "if(window.__rpmTickTickQuickActions){window.__rpmTickTickQuickActions('" + action + "');}");
-            }
-            catch (Exception ex)
-            {
-                _statusLabel.Text = "TickTick: no se pudo ejecutar la acción";
-                _app.Log("No se pudo ejecutar la acción rápida de TickTick", ex);
-            }
-        }
-
-        private void HandleTickTickActionMessage(string message)
-        {
-            string[] parts = (message ?? string.Empty).Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 3)
-                return;
-
-            string action = parts[1];
-            string result = parts[2];
-            if (string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase))
-            {
-                _statusLabel.Text = action == "tomorrow"
-                    ? "TickTick: tarea aplazada a mañana"
-                    : "TickTick: tarea aplazada una semana";
-            }
-            else if (string.Equals(result, "no-selection", StringComparison.OrdinalIgnoreCase))
-                _statusLabel.Text = "TickTick: selecciona una tarea primero";
-            else
-                _statusLabel.Text = "TickTick: no apareció la opción; revisa el menú de la tarea";
-        }
-
-        private bool IsTickTickPage()
-        {
-            string url = CoreWebView2 == null ? Record.Url : CoreWebView2.Source;
-            Uri uri;
-            if (!Uri.TryCreate(url, UriKind.Absolute, out uri))
-                return false;
-            string host = uri.Host ?? string.Empty;
-            return string.Equals(host, "ticktick.com", StringComparison.OrdinalIgnoreCase) ||
-                host.EndsWith(".ticktick.com", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private void UpdateTickTickActions()
-        {
-            _tickTickPageActive = IsTickTickPage();
-            LayoutToolbar();
-        }
-
         private async Task InitializeBrowserAsync(bool navigate)
         {
             _sleepPanel.Visible = true;
@@ -1868,8 +1671,6 @@ namespace ChatGPTLite
                 string message = args.TryGetWebMessageAsString();
                 if (string.Equals(message, "rpm-browser-user-activity", StringComparison.Ordinal))
                     MarkUserActivity();
-                else if (message != null && message.StartsWith("rpm-ticktick-action:", StringComparison.Ordinal))
-                    HandleTickTickActionMessage(message);
             };
             await core.AddScriptToExecuteOnDocumentCreatedAsync(
                 "(function(){var send=function(){try{chrome.webview.postMessage('rpm-browser-user-activity');}catch(e){}};" +
@@ -1885,7 +1686,6 @@ namespace ChatGPTLite
                 "var allow=function(e){if(window.__rpmCopyMode)e.stopImmediatePropagation();};" +
                 "document.addEventListener('selectstart',allow,true);document.addEventListener('copy',allow,true);" +
                 "document.addEventListener('cut',allow,true);document.addEventListener('contextmenu',allow,true);})();");
-            await core.AddScriptToExecuteOnDocumentCreatedAsync(TickTickQuickActionsScript);
 
             core.FaviconChanged += async delegate
             {
@@ -1907,7 +1707,6 @@ namespace ChatGPTLite
             };
             core.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs args)
             {
-                UpdateTickTickActions();
                 UpdateNavigationButtons();
                 if (!args.IsSuccess)
                     _statusLabel.Text = "Could not load · click ↻ to retry";
@@ -1927,7 +1726,6 @@ namespace ChatGPTLite
             {
                 if (!string.IsNullOrWhiteSpace(core.Source))
                     Record.Url = core.Source;
-                UpdateTickTickActions();
                 if (_addressBox != null && !_addressBox.Focused &&
                     !string.Equals(_addressBox.Text, Record.Url, StringComparison.Ordinal))
                     _addressBox.Text = Record.Url;
@@ -2565,8 +2363,6 @@ namespace ChatGPTLite
             menu.Items.Add(new ToolStripSeparator());
             foreach (Button button in _toolbarButtons)
             {
-                if ((button == _tickTickTomorrowButton || button == _tickTickNextWeekButton) && !_tickTickPageActive)
-                    continue;
                 if (button.Visible)
                     continue;
 
@@ -2677,8 +2473,6 @@ namespace ChatGPTLite
             foreach (Control item in _toolbarItems)
             {
                 Button action = item as Button;
-                if ((action == _tickTickTomorrowButton || action == _tickTickNextWeekButton) && !_tickTickPageActive)
-                    continue;
                 allToolbarWidth += item is Panel ? item.Width + 9 : item.Width + 2;
             }
             allToolbarWidth += _quickIdentifierBox.Width + _quickColorButton.Width + 8;
@@ -2712,9 +2506,7 @@ namespace ChatGPTLite
 
                 Button button = item as Button;
                 bool isAppearance = button == _appearanceButton;
-                bool isTickTickAction = button == _tickTickTomorrowButton || button == _tickTickNextWeekButton;
-                bool visible = (!isTickTickAction || _tickTickPageActive) &&
-                    left + button.Width + (isAppearance ? _quickIdentifierBox.Width + _quickColorButton.Width + 8 : 0) <= actionsLimit;
+                bool visible = left + button.Width + (isAppearance ? _quickIdentifierBox.Width + _quickColorButton.Width + 8 : 0) <= actionsLimit;
                 button.Visible = visible;
                 if (visible)
                 {
@@ -4112,10 +3904,6 @@ namespace ChatGPTLite
                 return "Recent";
             if (accessibleLabel.IndexOf("Capture full page", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Capture";
-            if (accessibleLabel.IndexOf("TickTick: move selected task to tomorrow", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Tomorrow";
-            if (accessibleLabel.IndexOf("TickTick: move selected task one week forward", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "+1 week";
             if (accessibleLabel.IndexOf("Check for updates", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Update";
             if (accessibleLabel.IndexOf("Exit completely", StringComparison.OrdinalIgnoreCase) >= 0)
