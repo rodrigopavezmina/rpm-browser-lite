@@ -1,6 +1,6 @@
 param(
     [switch]$SkipInstaller,
-    [string]$ArtifactLabel = '2.8.32',
+    [string]$ArtifactLabel = '2.8.33',
     [string]$BuildFolder = 'build'
 )
 
@@ -75,6 +75,7 @@ $sources = @(
     (Join-Path $sourceRoot 'LibraryForm.cs'),
     (Join-Path $sourceRoot 'Models.cs'),
     (Join-Path $sourceRoot 'SettingsForm.cs'),
+    (Join-Path $sourceRoot 'ExtensionsForm.cs'),
     (Join-Path $sourceRoot 'UiTheme.cs'),
     (Join-Path $sourceRoot 'WindowCustomizationForm.cs'),
     (Join-Path $sourceRoot 'AssemblyInfo.cs')

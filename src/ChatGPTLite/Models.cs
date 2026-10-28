@@ -164,6 +164,15 @@ namespace ChatGPTLite
         [DataMember(Order = 16)]
         public int HibernationIndicatorStyle { get; set; }
 
+        // WebView2 can load trusted, unpacked Chromium/Edge extensions from local
+        // folders. Keep this opt-in setting separate from the folder list so a
+        // user can disable all extensions without deleting their configuration.
+        [DataMember(Order = 17)]
+        public bool? BrowserExtensionsEnabled { get; set; }
+
+        [DataMember(Order = 18)]
+        public List<string> BrowserExtensionPaths { get; set; }
+
         public static AppSettings CreateDefault()
         {
             AppSettings settings = new AppSettings();
@@ -183,6 +192,8 @@ namespace ChatGPTLite
             settings.ShowStartDashboard = true;
             settings.StartDashboardTimeoutSeconds = 10;
             settings.HibernationIndicatorStyle = 1;
+            settings.BrowserExtensionsEnabled = true;
+            settings.BrowserExtensionPaths = new List<string>();
             return settings;
         }
 
@@ -210,6 +221,10 @@ namespace ChatGPTLite
                 StartDashboardTimeoutSeconds = 10;
             if (HibernationIndicatorStyle < 0 || HibernationIndicatorStyle > 5)
                 HibernationIndicatorStyle = 1;
+            if (!BrowserExtensionsEnabled.HasValue)
+                BrowserExtensionsEnabled = true;
+            if (BrowserExtensionPaths == null)
+                BrowserExtensionPaths = new List<string>();
         }
     }
 

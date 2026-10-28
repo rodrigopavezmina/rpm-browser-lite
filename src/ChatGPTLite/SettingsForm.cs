@@ -146,6 +146,12 @@ namespace ChatGPTLite
             Label storageHeading = LabelAt("Cache and updates", 24, 680, 400);
             storageHeading.Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold);
 
+            Button extensions = new Button();
+            extensions.Text = "Edge extensions…";
+            extensions.AutoSize = true;
+            extensions.Location = new Point(455, 675);
+            extensions.Click += delegate { _app.ShowExtensions(); };
+
             Label cacheLabel = LabelAt("Approximate web cache limit:", 26, 727, 350);
             _cacheMb = NumberAt(430, 723, 110, 64, 4096);
             Label cacheSuffix = LabelAt("MB", 545, 727, 50);
@@ -260,6 +266,7 @@ namespace ChatGPTLite
             Controls.Add(startDelaySuffix);
             Controls.Add(startHint);
             Controls.Add(storageHeading);
+            Controls.Add(extensions);
             Controls.Add(cacheLabel);
             Controls.Add(_cacheMb);
             Controls.Add(cacheSuffix);

@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.32";
+        public const string ProductVersion = "2.8.33";
         public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
         private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
@@ -39,6 +39,7 @@ namespace ChatGPTLite
         private readonly AltTriplePressHook _altTriplePressHook;
         private readonly System.Windows.Forms.Timer _libraryRefreshTimer;
         private Task<CoreWebView2Environment> _environmentTask;
+        private Task _extensionInstallTask;
         private LibraryForm _library;
         private SettingsForm _settings;
         private bool _exiting;
@@ -157,6 +158,7 @@ namespace ChatGPTLite
                 int cacheMb = Math.Max(64, State.Settings.CacheSizeMb);
                 long cacheBytes = (long)cacheMb * 1024L * 1024L;
                 CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions();
+                options.AreBrowserExtensionsEnabled = State.Settings.BrowserExtensionsEnabled == true;
                 options.AdditionalBrowserArguments =
                     "--autoplay-policy=user-gesture-required " +
                     "--disable-features=OverlayScrollbar,OverlayScrollbars " +
@@ -164,6 +166,55 @@ namespace ChatGPTLite
                 _environmentTask = CoreWebView2Environment.CreateAsync(null, _paths.WebViewDirectory, options);
             }
             return _environmentTask;
+        }
+
+        public Task InstallConfiguredExtensionsAsync(CoreWebView2Profile profile)
+        {
+            if (profile == null || State.Settings.BrowserExtensionsEnabled != true ||
+                State.Settings.BrowserExtensionPaths == null || State.Settings.BrowserExtensionPaths.Count == 0)
+                return Task.CompletedTask;
+
+            if (_extensionInstallTask == null)
+                _extensionInstallTask = InstallConfiguredExtensionsCoreAsync(profile);
+            return _extensionInstallTask;
+        }
+
+        private async Task InstallConfiguredExtensionsCoreAsync(CoreWebView2Profile profile)
+        {
+            List<string> configuredPaths = new List<string>();
+            foreach (string rawPath in State.Settings.BrowserExtensionPaths)
+            {
+                if (string.IsNullOrWhiteSpace(rawPath))
+                    continue;
+                try
+                {
+                    string fullPath = Path.GetFullPath(rawPath.Trim());
+                    if (!configuredPaths.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                        configuredPaths.Add(fullPath);
+                }
+                catch
+                {
+                    Log("Extensión omitida: ruta inválida " + rawPath, null);
+                }
+            }
+            foreach (string path in configuredPaths)
+            {
+                try
+                {
+                    string manifest = Path.Combine(path, "manifest.json");
+                    if (!Directory.Exists(path) || !File.Exists(manifest))
+                    {
+                        Log("Extensión omitida: falta manifest.json en " + path, null);
+                        continue;
+                    }
+                    await profile.AddBrowserExtensionAsync(path);
+                }
+                catch (Exception ex)
+                {
+                    // A broken extension must never prevent the web page from loading.
+                    Log("No se pudo cargar la extensión Edge/Chromium " + path, ex);
+                }
+            }
         }
 
         public BrowserWindow OpenWindow(string url, bool activate)
@@ -878,6 +929,12 @@ namespace ChatGPTLite
             if (_settings.WindowState == FormWindowState.Minimized)
                 _settings.WindowState = FormWindowState.Normal;
             _settings.Activate();
+        }
+
+        public void ShowExtensions()
+        {
+            using (ExtensionsForm form = new ExtensionsForm(this))
+                form.ShowDialog(_settings != null && !_settings.IsDisposed ? (IWin32Window)_settings : null);
         }
 
         public void SettingsChanged()

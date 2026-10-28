@@ -274,7 +274,10 @@ namespace ChatGPTLite
 
             _browserHost = new Panel();
             _browserHost.Dock = DockStyle.Fill;
-            _browserHost.BackColor = Color.White;
+            // Keep a dark loading surface while WebView2 is being recreated. This
+            // prevents the bright white native child window from flashing during
+            // hibernation restore and navigation.
+            _browserHost.BackColor = UiTheme.DarkBackground;
             _browserHost.Resize += delegate { ResizeBrowserToHost(); };
 
             _webArea = new Panel();
@@ -1582,6 +1585,8 @@ namespace ChatGPTLite
         private async Task InitializeBrowserAsync(bool navigate)
         {
             _sleepPanel.Visible = true;
+            _sleepPanel.BringToFront();
+            ApplyBrowserLoadingSurface();
             _statusLabel.Text = "Starting…";
             try
             {
@@ -1592,7 +1597,7 @@ namespace ChatGPTLite
                 WebView2 browser = new WebView2();
                 browser.Dock = DockStyle.None;
                 browser.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-                browser.DefaultBackgroundColor = Color.White;
+                browser.DefaultBackgroundColor = UiTheme.DarkBackground;
                 _browserHost.Controls.Add(browser);
                 browser.BringToFront();
                 _webView = browser;
@@ -1601,6 +1606,7 @@ namespace ChatGPTLite
                 await browser.EnsureCoreWebView2Async(environment);
                 ResizeBrowserToHost();
                 await ConfigureBrowserAsync(browser.CoreWebView2);
+                await _app.InstallConfiguredExtensionsAsync(browser.CoreWebView2.Profile);
 
                 _isHibernated = false;
                 _isSuspended = false;
@@ -1633,6 +1639,28 @@ namespace ChatGPTLite
             {
                 _initializationTask = null;
             }
+        }
+
+        private void ApplyBrowserLoadingSurface()
+        {
+            Color loading = UiTheme.DarkBackground;
+            if (_browserHost != null && !_browserHost.IsDisposed)
+                _browserHost.BackColor = loading;
+            if (_webArea != null && !_webArea.IsDisposed)
+                _webArea.BackColor = loading;
+            if (_webView != null && !_webView.IsDisposed)
+                _webView.DefaultBackgroundColor = loading;
+        }
+
+        private void ApplyBrowserPageSurface()
+        {
+            Color surface = _app.State.Settings.DarkMode ? UiTheme.DarkSurface : Color.White;
+            if (_browserHost != null && !_browserHost.IsDisposed)
+                _browserHost.BackColor = surface;
+            if (_webArea != null && !_webArea.IsDisposed)
+                _webArea.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkBackground : Color.White;
+            if (_webView != null && !_webView.IsDisposed)
+                _webView.DefaultBackgroundColor = surface;
         }
 
         private void ResizeBrowserToHost()
@@ -1703,6 +1731,7 @@ namespace ChatGPTLite
                     TryOpenExternal(args.Uri);
                     return;
                 }
+                ApplyBrowserLoadingSurface();
                 _statusLabel.Text = "Loading…";
             };
             core.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs args)
@@ -1712,6 +1741,7 @@ namespace ChatGPTLite
                     _statusLabel.Text = "Could not load · click ↻ to retry";
                 else
                 {
+                    ApplyBrowserPageSurface();
                     UpdateResourceUi();
                     ScheduleQuickInitialRecovery(core);
                     await CaptureFaviconAsync(core);

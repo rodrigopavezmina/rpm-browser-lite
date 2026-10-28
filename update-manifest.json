@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.32",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.32/RPM-Browser-Lite-Setup-2.8.32-x64.exe",
-    "notes":  "Se retiraron las acciones experimentales de TickTick para mantener la estabilidad y evitar botones que no modificaban tareas.",
-    "sha256":  "0EB8204CF8A9A921F898A7F30213F85497A27973A602B233E63445DE4B8F0ABF"
+    "version":  "2.8.33",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.33/RPM-Browser-Lite-Setup-2.8.33-x64.exe",
+    "notes":  "Soporte controlado para extensiones Edge/Chromium locales y restauración sin destello blanco al salir de hibernación.",
+    "sha256":  "3CE644D71A083B14D7805CBD09523A8967E43BE871DF4CA27B8DE3A78219B202"
 }
