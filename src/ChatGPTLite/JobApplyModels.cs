@@ -177,8 +177,7 @@ namespace ChatGPTLite
             EnsureFieldMetadata("GitHubUrl", GitHubUrl, NormalizeUrl(GitHubUrl), "sensitive");
             EnsureFieldMetadata("CurrentTitle", CurrentTitle, NormalizeWords(CurrentTitle), "professional");
             EnsureFieldMetadata("DesiredRole", DesiredRole, NormalizeWords(DesiredRole), "professional");
-            if (YearsExperience > 0)
-                EnsureFieldMetadata("YearsExperience", YearsExperience.ToString(CultureInfo.InvariantCulture), YearsExperience.ToString(CultureInfo.InvariantCulture), "professional");
+            EnsureFieldMetadata("YearsExperience", YearsExperience.ToString(CultureInfo.InvariantCulture), YearsExperience.ToString(CultureInfo.InvariantCulture), "professional");
             EnsureFieldMetadata("WorkAuthorization", WorkAuthorization, NormalizeWords(WorkAuthorization), "sensitive");
             EnsureFieldMetadata("AvailableStartDate", AvailableStartDate, NormalizeDate(AvailableStartDate), "personal");
             EnsureFieldMetadata("SalaryExpectation", SalaryExpectation, NormalizeWords(SalaryExpectation), "sensitive");
@@ -186,12 +185,9 @@ namespace ChatGPTLite
             EnsureFieldMetadata("ResumePath", ResumePath, ResumePath.Trim().Trim('"'), "high");
             EnsureFieldMetadata("WorkMode", WorkMode, NormalizeWords(WorkMode), "personal");
             EnsureFieldMetadata("EmploymentType", EmploymentType, NormalizeWords(EmploymentType), "professional");
-            if (RequiresSponsorship)
-                EnsureFieldMetadata("RequiresSponsorship", "true", "true", "sensitive");
-            if (WillingToRelocate)
-                EnsureFieldMetadata("WillingToRelocate", "true", "true", "personal");
-            if (OverwriteExisting)
-                EnsureFieldMetadata("OverwriteExisting", "true", "true", "normal");
+            EnsureFieldMetadata("RequiresSponsorship", RequiresSponsorship ? "true" : "false", RequiresSponsorship ? "true" : "false", "sensitive");
+            EnsureFieldMetadata("WillingToRelocate", WillingToRelocate ? "true" : "false", WillingToRelocate ? "true" : "false", "personal");
+            EnsureFieldMetadata("OverwriteExisting", OverwriteExisting ? "true" : "false", OverwriteExisting ? "true" : "false", "normal");
 
             for (int index = 0; index < Experiences.Count; index++)
             {
@@ -252,12 +248,11 @@ namespace ChatGPTLite
             JobApplicationFieldMetadata metadata;
             if (!FieldMetadata.TryGetValue(key, out metadata) || metadata == null)
             {
-                if (original.Length == 0) return;
                 FieldMetadata[key] = new JobApplicationFieldMetadata
                 {
                     NormalizedValue = normalized,
-                    Source = "legacy-profile",
-                    Confidence = 0.5,
+                    Source = original.Length == 0 ? "unknown" : "legacy-profile",
+                    Confidence = original.Length == 0 ? 0 : 0.5,
                     ApprovedAtUtc = string.Empty,
                     Sensitivity = sensitivity,
                     OriginalEvidence = original
@@ -281,7 +276,11 @@ namespace ChatGPTLite
             {
                 metadata.NormalizedValue = normalized;
                 metadata.OriginalEvidence = original;
-                metadata.Source = "legacy-profile";
+                if (original.Length > 0)
+                {
+                    metadata.Source = "legacy-profile";
+                    if (metadata.Confidence == 0) metadata.Confidence = 0.5;
+                }
             }
             if (metadata.Sensitivity == "unknown") metadata.Sensitivity = sensitivity;
         }

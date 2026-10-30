@@ -88,6 +88,7 @@ assert.ok(second.skipped.length >= 2);
 
 const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'JobApplyEngine.cs'), 'utf8');
 assert.match(engine, /pageProfile\.ResumePath = string\.Empty/);
+assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>\(\)/);
 assert.match(engine, /JobApplyTimeoutException/);
 
 console.log('job-apply-robustness: ok');

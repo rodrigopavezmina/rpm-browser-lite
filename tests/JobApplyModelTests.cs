@@ -65,6 +65,7 @@ namespace ChatGPTLite
                 incomplete.Repair();
                 Expect(incomplete.Experiences != null && incomplete.Education != null, "incomplete lists were not recovered");
                 Expect(incomplete.FieldMetadata != null, "incomplete metadata dictionary was not recovered");
+                Expect(incomplete.GetFieldMetadata("RequiresSponsorship") != null, "empty scalar metadata was not created");
                 Expect(incomplete.FirstName == string.Empty && incomplete.ResumePath == string.Empty, "incomplete scalar values were not repaired");
 
                 string encryptedPath = Path.Combine(directory, "profile.dat");
