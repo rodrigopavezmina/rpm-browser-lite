@@ -502,6 +502,18 @@
             if (state.profile && !state.filling) fill(state.profile, { silent: true, retry: true });
         }, 500);
     }
+    function cancel() {
+        if (state.timer) global.clearTimeout(state.timer);
+        state.timer = null;
+        state.retryCount = MAX_DYNAMIC_RETRIES;
+        if (state.observer) {
+            try { state.observer.disconnect(); } catch (error) { }
+            state.observer = null;
+        }
+        state.profile = null;
+        state.filling = false;
+        return { cancelled: true };
+    }
     function getOntology() {
         return definitions.map(function (item) {
             return {
@@ -513,7 +525,7 @@
             };
         });
     }
-    var api = { version: VERSION, ontologyVersion: "2.0", __rpmJobApplyOwned: true, fill: fill, normalize: normalize, getOntology: getOntology };
+    var api = { version: VERSION, ontologyVersion: "2.0", __rpmJobApplyOwned: true, fill: fill, cancel: cancel, normalize: normalize, getOntology: getOntology };
     try {
         Object.defineProperty(global, "RpmJobApply", {
             value: Object.freeze ? Object.freeze(api) : api,

@@ -1771,6 +1771,9 @@ namespace ChatGPTLite
             }
             catch (Exception ex)
             {
+                // Fire-and-forget: blocking the WinForms thread here could prevent
+                // WebView2 from completing the cancellation request itself.
+                JobApplyEngine.CancelAsync(CoreWebView2);
                 _jobApplySessionActive = false;
                 _jobApplySessionHost = string.Empty;
                 _jobApplyPreparedPages.Clear();
@@ -2082,6 +2085,7 @@ namespace ChatGPTLite
                 UpdateNavigationButtons();
                 if (!args.IsSuccess)
                 {
+                    await JobApplyEngine.CancelAsync(core);
                     _jobApplySessionActive = false;
                     _jobApplyPreparedPages.Clear();
                     _app.LogJobApply("navigation-failed", core.Source, "manual-retry", null);

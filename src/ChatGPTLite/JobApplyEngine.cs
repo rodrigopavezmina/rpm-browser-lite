@@ -86,6 +86,37 @@ namespace ChatGPTLite
         }
 
         /// <summary>
+        /// Stops delayed DOM retries after a timeout, navigation change or other
+        /// failure.  This is best-effort because WebView2 cannot cancel a script
+        /// already executing in the renderer; it prevents any subsequent observer
+        /// callback from changing a page that has been handed back to the user.
+        /// </summary>
+        public static async Task CancelAsync(CoreWebView2 browser)
+        {
+            if (browser == null)
+                return;
+
+            try
+            {
+                DateTime deadline = DateTime.UtcNow.AddSeconds(2);
+                await AwaitWithDeadline(
+                    browser.ExecuteScriptAsync(
+                        "(function(){try{" +
+                        "if(window.RpmJobApply&&typeof window.RpmJobApply.cancel==='function')" +
+                        "return window.RpmJobApply.cancel();" +
+                        "return {cancelled:false};" +
+                        "}catch(error){return {cancelled:false};}})()"),
+                    deadline,
+                    string.Empty);
+            }
+            catch
+            {
+                // Cancellation is a recovery aid. The caller still falls back to
+                // manual completion when this renderer is unavailable.
+            }
+        }
+
+        /// <summary>
         /// Attaches the CV that the user explicitly selected in the local profile.
         /// Web pages cannot receive arbitrary local paths from JavaScript, so the
         /// trusted desktop host uses the DevTools DOM command for the input that the

@@ -88,6 +88,8 @@ assert.strictEqual(second.filled.length, 0);
 assert.ok(second.skipped.length >= 2);
 assert.match(source, /MAX_DYNAMIC_RETRIES/);
 assert.match(source, /scheduleDynamicRetry/);
+assert.match(source, /function cancel\(\)/);
+assert.match(source, /observer\.disconnect/);
 assert.doesNotMatch(source, /\.submit\s*\(/);
 assert.doesNotMatch(source, /\.click\s*\(/);
 
@@ -95,12 +97,14 @@ const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 
 assert.match(engine, /pageProfile\.ResumePath = string\.Empty/);
 assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>\(\)/);
 assert.match(engine, /JobApplyTimeoutException/);
+assert.match(engine, /CancelAsync/);
 assert.match(engine, /fileCount/);
 assert.match(engine, /List<JobApplyMatch> Matches/);
 assert.match(engine, /CanonicalField/);
 
 const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
+assert.match(browser, /JobApplyEngine\.CancelAsync\(CoreWebView2\)/);
 assert.match(browser, /initial-failed/);
 assert.match(browser, /manualmente si es necesario/);
 const program = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'Program.cs'), 'utf8');
