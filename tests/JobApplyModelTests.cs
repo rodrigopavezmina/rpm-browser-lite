@@ -68,6 +68,13 @@ namespace ChatGPTLite
                 Expect(incomplete.GetFieldMetadata("RequiresSponsorship") != null, "empty scalar metadata was not created");
                 Expect(incomplete.FirstName == string.Empty && incomplete.ResumePath == string.Empty, "incomplete scalar values were not repaired");
 
+                string diagnostic = JobApplyDiagnostics.Message(
+                    "email=ana@example.com cv=C:\\Users\\Ana\\cv.pdf token=secret-value");
+                Expect(diagnostic.IndexOf("ana@example.com", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked email");
+                Expect(diagnostic.IndexOf("cv.pdf", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked CV path");
+                Expect(diagnostic.IndexOf("secret-value", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked secret");
+                Expect(JobApplyDiagnostics.Exception(new InvalidOperationException("sensitive page text")) == "InvalidOperationException", "diagnostic leaked exception details");
+
                 string encryptedPath = Path.Combine(directory, "profile.dat");
                 JobApplyStore.Save(encryptedPath, approvedProfile);
                 JobApplicationProfile loaded = JobApplyStore.Load(encryptedPath);

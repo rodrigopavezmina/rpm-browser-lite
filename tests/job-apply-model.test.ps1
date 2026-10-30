@@ -11,6 +11,7 @@ try {
     $sources = @(
         (Join-Path $root 'src\ChatGPTLite\JobApplyModels.cs'),
         (Join-Path $root 'src\ChatGPTLite\JobApplyStore.cs'),
+        (Join-Path $root 'src\ChatGPTLite\JobApplyDiagnostics.cs'),
         (Join-Path $PSScriptRoot 'JobApplyModelTests.cs')
     )
     $args = @(

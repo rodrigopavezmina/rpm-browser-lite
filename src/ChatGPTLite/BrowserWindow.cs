@@ -1679,9 +1679,16 @@ namespace ChatGPTLite
             }
             catch (Exception ex)
             {
+                _jobApplySessionActive = false;
+                _jobApplySessionHost = string.Empty;
+                _jobApplyPreparedPages.Clear();
+                _app.LogJobApply(
+                    continuation ? "continuation-failed" : "initial-failed",
+                    CoreWebView2 == null ? Record.Url : CoreWebView2.Source,
+                    "manual-retry",
+                    ex);
                 if (continuation)
                 {
-                    _jobApplySessionActive = false;
                     _statusLabel.Text = "Autollenado detenido · usa ⚡ para reintentar";
                     _app.Log("No se pudo continuar la postulación multipágina", ex);
                     return;
@@ -1691,7 +1698,7 @@ namespace ChatGPTLite
                 MessageBox.Show(
                     this,
                     "No se pudo completar este formulario.\r\n\r\n" + ex.Message +
-                    "\r\n\r\nEl sitio no fue enviado ni se modificó tu perfil.",
+                    "\r\n\r\nEl sitio no fue enviado ni se modificó tu perfil. Completa los campos manualmente si es necesario.",
                     "Postulación rápida",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
@@ -1963,6 +1970,7 @@ namespace ChatGPTLite
                 {
                     _jobApplySessionActive = false;
                     _jobApplySessionHost = string.Empty;
+                    _jobApplyPreparedPages.Clear();
                 }
                 Uri uri;
                 if (Uri.TryCreate(args.Uri, UriKind.Absolute, out uri) &&
@@ -2035,12 +2043,22 @@ namespace ChatGPTLite
                 _jobApplySessionActive = false;
                 _jobApplyPreparedPages.Clear();
                 _app.LogJobApply("webview-process-failed", core.Source, "manual-retry", null);
+                if (IsDisposed || Disposing)
+                    return;
                 _statusLabel.Text = "Web view stopped · restoring";
-                BeginInvoke((MethodInvoker)delegate
+                try
                 {
-                    Hibernate();
-                    BeginRestore();
-                });
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (IsDisposed || Disposing) return;
+                        Hibernate();
+                        BeginRestore();
+                    });
+                }
+                catch
+                {
+                    // The window may close while WebView2 reports its failure.
+                }
             };
         }
 

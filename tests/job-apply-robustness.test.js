@@ -85,10 +85,20 @@ assert.strictEqual(first.filled.length, 2);
 const second = window.RpmJobApply.fill(profile);
 assert.strictEqual(second.filled.length, 0);
 assert.ok(second.skipped.length >= 2);
+assert.match(source, /MAX_DYNAMIC_RETRIES/);
+assert.match(source, /scheduleDynamicRetry/);
+assert.doesNotMatch(source, /\.submit\s*\(/);
+assert.doesNotMatch(source, /\.click\s*\(/);
 
 const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'JobApplyEngine.cs'), 'utf8');
 assert.match(engine, /pageProfile\.ResumePath = string\.Empty/);
 assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>\(\)/);
 assert.match(engine, /JobApplyTimeoutException/);
+assert.match(engine, /fileCount/);
+
+const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
+assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
+assert.match(browser, /initial-failed/);
+assert.match(browser, /manualmente si es necesario/);
 
 console.log('job-apply-robustness: ok');

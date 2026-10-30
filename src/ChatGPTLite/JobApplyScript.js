@@ -208,6 +208,11 @@
         options = options || {};
         if (!profile) return { filled: [], review: [], skipped: [], resumeFieldFound: false, error: "Se requiere una sesión de llenado explícita." };
         state.profile = profile;
+        if (!options.retry) {
+            if (state.timer) global.clearTimeout(state.timer);
+            state.timer = null;
+            state.retryCount = 0;
+        }
         if (state.filling) return { filled: [], review: [], skipped: [], resumeFieldFound: false, busy: true };
         state.filling = true;
         var output = { filled: [], review: [], skipped: [], resumeFieldFound: false };
@@ -218,7 +223,6 @@
                 scheduleDynamicRetry();
                 return output;
             }
-            state.retryCount = 0;
             for (var i = 0; i < controls.length; i++) {
                 var element = controls[i], type = normalize(element.type || element.tagName);
                 var label = controlText(element);
@@ -275,7 +279,8 @@
         }
         state.observer = new MutationObserver(function () {
             if (state.timer) global.clearTimeout(state.timer);
-            state.timer = global.setTimeout(function () { if (state.profile && !state.filling) fill(state.profile, { silent: true }); }, 350);
+            state.timer = null;
+            scheduleDynamicRetry();
         });
         state.observer.observe(document.body, { childList: true, subtree: true });
     }

@@ -170,9 +170,20 @@ namespace ChatGPTLite
                         "this.dispatchEvent(new Event('change',{bubbles:true}));" +
                         "return this.files?this.files.length:0;}";
                     callParameters["returnByValue"] = true;
-                    await CallDevToolsAsync(
+                    string eventRaw = await CallDevToolsAsync(
                         browser, "Runtime.callFunctionOn", serializer.Serialize(callParameters), deadline,
                         "El portal tardó demasiado en confirmar el CV.");
+                    Dictionary<string, object> eventResult = ParseDictionary(eventRaw, serializer);
+                    int fileCount = GetInt(GetDictionary(eventResult, "result"), "value");
+                    if (fileCount < 1)
+                        return ResumeAttachResult.Failed(
+                            "El portal no confirmó el CV. Adjúntalo manualmente y verifica el archivo.");
+                }
+
+                else
+                {
+                    return ResumeAttachResult.Failed(
+                        "No se pudo validar el campo de CV. Adjúntalo manualmente y verifica el archivo.");
                 }
 
                 return ResumeAttachResult.Attached(Path.GetFileName(fullPath));
