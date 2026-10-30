@@ -55,6 +55,7 @@ namespace ChatGPTLite
         private readonly Button _reloadButton;
         private readonly Button _downloadsButton;
         private readonly Button _jobApplyButton;
+        private readonly Button _formAuditButton;
         private readonly Button _copyModeButton;
         private readonly Button _cloneButton;
         private readonly Button _newBookmarkButton;
@@ -200,6 +201,7 @@ namespace ChatGPTLite
             _reloadButton = CreateToolbarButton("↻", 40);
             _downloadsButton = CreateToolbarButton("⇩", 40);
             _jobApplyButton = CreateToolbarButton("⚡", 48);
+            _formAuditButton = CreateToolbarButton("AUD", 48);
             _copyModeButton = CreateToolbarButton("⧉", 40);
             _cloneButton = CreateToolbarButton("⧈", 40);
             Button homeButton = CreateToolbarButton("⌂", 40);
@@ -257,6 +259,7 @@ namespace ChatGPTLite
             AddToolbarAction(_forwardButton, "› Forward");
             AddToolbarAction(_reloadButton, "↻ Reload");
             AddToolbarAction(_jobApplyButton, "⚡ Postular · completar formulario (Ctrl+Shift+A)");
+            AddToolbarAction(_formAuditButton, "AUD Auditar formulario (Ctrl+Shift+I)");
             AddToolbarAction(_downloadsButton, "⇩ Downloads (Ctrl+J)");
             AddToolbarAction(_copyModeButton, "⧉ Copy mode: enable text selection");
             AddToolbarAction(_notesButton, "✎ Show or hide notes");
@@ -415,6 +418,7 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(homeButton, "Default home page (Ctrl+N)");
             _toolTip.SetToolTip(newButton, "New window (Ctrl+Shift+N)");
             _toolTip.SetToolTip(_jobApplyButton, "Completar esta postulación desde tu perfil local (Ctrl+Shift+A)");
+            _toolTip.SetToolTip(_formAuditButton, "Inspeccionar y exportar el inventario del formulario (Ctrl+Shift+I)");
             _toolTip.SetToolTip(_notesButton, "Show or hide attached notes (Ctrl+Shift+M)");
             _toolTip.SetToolTip(_newBookmarkButton, "Add the current page to bookmarks");
             _toolTip.SetToolTip(_trayShortcutButton, "Keep or remove this page as an icon beside the clock");
@@ -434,6 +438,7 @@ namespace ChatGPTLite
             _reloadButton.Click += delegate { if (CoreWebView2 != null) CoreWebView2.Reload(); else BeginRestore(); };
             _downloadsButton.Click += async delegate { await OpenDownloadsAsync(); };
             _jobApplyButton.Click += async delegate { await PrepareJobApplicationAsync(); };
+            _formAuditButton.Click += async delegate { await AuditAndExportFormAsync(); };
             _copyModeButton.Click += async delegate { await ToggleCopyModeAsync(); };
             _cloneButton.Click += delegate { _app.CloneWindow(this, true); };
             _appearanceButton.Click += delegate { ShowCustomization(); };
@@ -1567,6 +1572,11 @@ namespace ChatGPTLite
                 BeginInvoke((MethodInvoker)async delegate { await PrepareJobApplicationAsync(); });
                 return true;
             }
+            if (keyData == (Keys.Control | Keys.Shift | Keys.I))
+            {
+                BeginInvoke((MethodInvoker)async delegate { await AuditAndExportFormAsync(); });
+                return true;
+            }
             if (keyData == (Keys.Control | Keys.J))
             {
                 BeginInvoke((MethodInvoker)async delegate { await OpenDownloadsAsync(); });
@@ -1602,6 +1612,88 @@ namespace ChatGPTLite
         private Task PrepareJobApplicationAsync()
         {
             return PrepareJobApplicationAsync(false);
+        }
+
+        private async Task AuditAndExportFormAsync()
+        {
+            if (_formAuditButton == null || !_formAuditButton.Enabled)
+                return;
+
+            try
+            {
+                _formAuditButton.Enabled = false;
+                _statusLabel.Text = "Auditando formulario…";
+                await AwaitJobApplyOperationAsync(
+                    EnsureBrowserReadyAsync(true),
+                    TimeSpan.FromSeconds(35),
+                    "WebView2 no respondió a tiempo. No se auditó el formulario.");
+                await AwaitJobApplyNavigationAsync(TimeSpan.FromSeconds(35));
+                CoreWebView2 browser = CoreWebView2;
+                if (browser == null)
+                    throw new InvalidOperationException("El navegador todavía no está listo.");
+
+                int navigationGeneration = _jobApplyNavigationGeneration;
+                string host = GetJobApplyHost(browser.Source ?? Record.Url);
+                if (host.Length == 0)
+                    throw new InvalidOperationException("La página actual no es un formulario web auditable.");
+
+                JobFormAuditResult result = await JobApplyAuditEngine.AuditAsync(
+                    browser,
+                    TimeSpan.FromSeconds(20));
+                EnsureJobApplyPageStable(navigationGeneration, host);
+                if (result.HasError || string.IsNullOrWhiteSpace(result.Json))
+                    throw new InvalidOperationException("No se pudo generar el inventario del formulario.");
+
+                using (SaveFileDialog dialog = new SaveFileDialog())
+                {
+                    dialog.Title = "Exportar inventario del formulario";
+                    dialog.Filter = "Inventario JSON (*.json)|*.json|Todos los archivos (*.*)|*.*";
+                    dialog.DefaultExt = "json";
+                    dialog.AddExtension = true;
+                    dialog.FileName = "form-audit.json";
+                    if (dialog.ShowDialog(this) != DialogResult.OK)
+                    {
+                        _statusLabel.Text = "Auditoría cancelada";
+                        return;
+                    }
+                    File.WriteAllText(dialog.FileName, result.Json, new UTF8Encoding(false));
+                    _statusLabel.Text = "Inventario exportado · " + result.FieldCount.ToString() + " campos";
+                    _app.LogJobApply(
+                        "audit-exported",
+                        browser.Source ?? Record.Url,
+                        "fields=" + result.FieldCount.ToString() + ",required=" + result.RequiredCount.ToString(),
+                        null);
+                    MessageBox.Show(
+                        this,
+                        "Inventario exportado correctamente.\r\n\r\nCampos: " + result.FieldCount.ToString() +
+                        "\r\nRequeridos: " + result.RequiredCount.ToString() +
+                        "\r\n\r\nLa auditoría no rellenó ni envió el formulario.",
+                        "Auditar formulario",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                _statusLabel.Text = "Auditoría detenida · revisión manual";
+                _app.LogJobApply(
+                    "audit-failed",
+                    CoreWebView2 == null ? Record.Url : CoreWebView2.Source,
+                    "manual-review",
+                    ex);
+                MessageBox.Show(
+                    this,
+                    "No se pudo auditar el formulario.\r\n\r\nRevisa los campos manualmente. El formulario no fue rellenado ni enviado.",
+                    "Auditar formulario",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                if (_formAuditButton != null && !_formAuditButton.IsDisposed)
+                    _formAuditButton.Enabled = true;
+                LayoutToolbar();
+            }
         }
 
         private async Task PrepareJobApplicationAsync(bool continuation)
