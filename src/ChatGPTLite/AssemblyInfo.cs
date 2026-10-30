@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("RPM Browser Lite")]
-[assembly: AssemblyDescription("Navegador ligero con ventanas suspendibles y hibernables")]
+[assembly: AssemblyTitle("RPM IA Job Apply Browser Lite Turbo")]
+[assembly: AssemblyDescription("Navegador ligero para agilizar revisión y llenado de postulaciones laborales")]
 [assembly: AssemblyCompany("RPM")]
-[assembly: AssemblyProduct("RPM Browser Lite")]
+[assembly: AssemblyProduct("RPM IA Job Apply Browser Lite Turbo")]
 [assembly: AssemblyCopyright("Copyright 2026")]
 [assembly: ComVisible(false)]
-[assembly: Guid("cbad1dcb-1c53-4c68-b9d8-39dc535057f0")]
-[assembly: AssemblyVersion("2.8.33.0")]
-[assembly: AssemblyFileVersion("2.8.33.0")]
+[assembly: Guid("7b625455-e7b3-43f2-b31d-aa163b1f5e8b")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]

@@ -1,6 +1,6 @@
 param(
     [switch]$SkipInstaller,
-    [string]$ArtifactLabel = '2.8.33',
+    [string]$ArtifactLabel = '1.0.0',
     [string]$BuildFolder = 'build'
 )
 
@@ -18,7 +18,7 @@ $packageArchive = Join-Path $projectRoot ".packages\Microsoft.Web.WebView2.$pack
 $packageUrl = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$packageVersion/microsoft.web.webview2.$packageVersion.nupkg"
 $buildRoot = Join-Path $projectRoot $BuildFolder
 $appBuild = Join-Path $buildRoot 'app'
-$portableBuild = Join-Path $buildRoot 'RPM Browser Lite Portable'
+$portableBuild = Join-Path $buildRoot 'RPM IA Job Apply Browser Lite Turbo Portable'
 $payloadBuild = Join-Path $buildRoot 'installer-payload'
 $artifacts = Join-Path $projectRoot 'artifacts'
 $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
@@ -58,7 +58,7 @@ $coreDll = Join-Path $packageRoot 'lib\net462\Microsoft.Web.WebView2.Core.dll'
 $formsDll = Join-Path $packageRoot 'lib\net462\Microsoft.Web.WebView2.WinForms.dll'
 $loaderDll = Join-Path $packageRoot 'runtimes\win-x64\native\WebView2Loader.dll'
 $iconGenerator = Join-Path $appBuild 'IconGenerator.exe'
-$iconPath = Join-Path $buildRoot 'RPMBrowserLite.ico'
+$iconPath = Join-Path $buildRoot 'RPMIAJobApplyBrowserLiteTurbo.ico'
 & $csc @('/nologo','/target:exe','/platform:anycpu','/optimize+',"/out:$iconGenerator",'/reference:System.dll','/reference:System.Drawing.dll',(Join-Path $projectRoot 'tools\IconGenerator.cs'))
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el generador de icono.' }
 & $iconGenerator $iconPath
@@ -76,17 +76,22 @@ $sources = @(
     (Join-Path $sourceRoot 'Models.cs'),
     (Join-Path $sourceRoot 'SettingsForm.cs'),
     (Join-Path $sourceRoot 'ExtensionsForm.cs'),
+    (Join-Path $sourceRoot 'JobApplyModels.cs'),
+    (Join-Path $sourceRoot 'JobApplyStore.cs'),
+    (Join-Path $sourceRoot 'JobApplyEngine.cs'),
+    (Join-Path $sourceRoot 'JobProfileForm.cs'),
     (Join-Path $sourceRoot 'UiTheme.cs'),
     (Join-Path $sourceRoot 'WindowCustomizationForm.cs'),
     (Join-Path $sourceRoot 'AssemblyInfo.cs')
 )
-$appExe = Join-Path $appBuild 'RPMBrowserLite.exe'
+$appExe = Join-Path $appBuild 'RPMIAJobApplyBrowserLiteTurbo.exe'
 
 $compilerArgs = @(
     '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/debug-',
     "/out:$appExe",
     "/win32icon:$iconPath",
     "/win32manifest:$(Join-Path $sourceRoot 'app.manifest')",
+    "/resource:$(Join-Path $sourceRoot 'JobApplyScript.js'),ChatGPTLite.JobApplyScript.js",
     '/reference:System.dll', '/reference:System.Core.dll', '/reference:System.Drawing.dll',
     '/reference:System.Windows.Forms.dll', '/reference:System.Runtime.Serialization.dll',
     '/reference:System.Security.dll', '/reference:System.Web.Extensions.dll',
@@ -94,20 +99,20 @@ $compilerArgs = @(
 ) + $sources
 
 & $csc $compilerArgs
-if ($LASTEXITCODE -ne 0) { throw 'La compilación de RPM Browser Lite falló.' }
+if ($LASTEXITCODE -ne 0) { throw 'La compilación de RPM IA Job Apply Browser Lite Turbo falló.' }
 
 Copy-Item -LiteralPath $coreDll, $formsDll, $loaderDll -Destination $appBuild
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'ChatGPTLite.exe.config') -Destination (Join-Path $appBuild 'RPMBrowserLite.exe.config')
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'ChatGPTLite.exe.config') -Destination (Join-Path $appBuild 'RPMIAJobApplyBrowserLiteTurbo.exe.config')
 
 Copy-Item -Path (Join-Path $appBuild '*') -Destination $portableBuild -Recurse
 New-Item -ItemType File -Path (Join-Path $portableBuild 'portable.flag') -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $projectRoot 'LEEME-B2B.md') -Destination (Join-Path $portableBuild 'LEEME.md')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'LEEME-JOB-APPLY.md') -Destination (Join-Path $portableBuild 'LEEME.md')
 
 Copy-Item -Path (Join-Path $appBuild '*') -Destination $payloadBuild -Recurse
-Copy-Item -LiteralPath (Join-Path $projectRoot 'LEEME-B2B.md') -Destination (Join-Path $payloadBuild 'LEEME.md')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'LEEME-JOB-APPLY.md') -Destination (Join-Path $payloadBuild 'LEEME.md')
 
-$portableFileName = "RPM-Browser-Lite-Portable-$ArtifactLabel-x64.zip"
-$installerFileName = "RPM-Browser-Lite-Setup-$ArtifactLabel-x64.exe"
+$portableFileName = "RPM-IA-Job-Apply-Browser-Lite-Turbo-Portable-$ArtifactLabel-x64.zip"
+$installerFileName = "RPM-IA-Job-Apply-Browser-Lite-Turbo-Setup-$ArtifactLabel-x64.exe"
 $hashFileName = "SHA256SUMS-$ArtifactLabel.txt"
 $portableZip = Join-Path $artifacts $portableFileName
 Move-StaleArtifact $portableZip
@@ -117,7 +122,7 @@ if (-not $SkipInstaller) {
     $installerSource = Join-Path $projectRoot 'src\Installer\Program.cs'
     $installerExe = Join-Path $artifacts $installerFileName
     Move-StaleArtifact $installerExe
-$payloadFiles = @('RPMBrowserLite.exe','RPMBrowserLite.exe.config','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','LEEME.md')
+$payloadFiles = @('RPMIAJobApplyBrowserLiteTurbo.exe','RPMIAJobApplyBrowserLiteTurbo.exe.config','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','LEEME.md')
     $installerArgs = @(
         '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/debug-',
         "/out:$installerExe",

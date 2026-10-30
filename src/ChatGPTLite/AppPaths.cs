@@ -14,6 +14,7 @@ namespace ChatGPTLite
         public string CapturesDirectory { get; private set; }
         public string IconsDirectory { get; private set; }
         public string StateFile { get; private set; }
+        public string JobApplyProfileFile { get; private set; }
         public string LogFile { get; private set; }
 
         public static AppPaths Create()
@@ -21,12 +22,9 @@ namespace ChatGPTLite
             string executableDirectory = AppDomain.CurrentDomain.BaseDirectory;
             bool portable = File.Exists(Path.Combine(executableDirectory, "portable.flag"));
             string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string legacyDataDirectory = Path.Combine(localData, "ChatGPT Lite");
             string dataDirectory = portable
                 ? Path.Combine(executableDirectory, "Data")
-                : (Directory.Exists(legacyDataDirectory)
-                    ? legacyDataDirectory
-                    : Path.Combine(localData, "RPM Browser Lite"));
+                : Path.Combine(localData, "RPM IA Job Apply Browser Lite Turbo");
 
             Directory.CreateDirectory(dataDirectory);
 
@@ -40,7 +38,11 @@ namespace ChatGPTLite
             paths.CapturesDirectory = Path.Combine(dataDirectory, "Capturas");
             paths.IconsDirectory = Path.Combine(dataDirectory, "Iconos");
             paths.StateFile = Path.Combine(dataDirectory, "estado.json");
-            paths.LogFile = Path.Combine(dataDirectory, "ChatGPTLite.log");
+            // The application profile contains personal and employment data, so it
+            // is kept outside estado.json and protected separately with Windows
+            // DPAPI by JobApplyStore.
+            paths.JobApplyProfileFile = Path.Combine(dataDirectory, "perfil-postulacion.dat");
+            paths.LogFile = Path.Combine(dataDirectory, "RPMIAJobApplyBrowserLiteTurbo.log");
             return paths;
         }
     }

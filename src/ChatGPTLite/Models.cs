@@ -184,7 +184,9 @@ namespace ChatGPTLite
             settings.MinimizeToTray = true;
             settings.DarkMode = false;
             settings.CapturePreviewOnHibernate = true;
-            settings.AutomaticUpdates = true;
+            // A separate release URL must be configured explicitly for this
+            // product; it must never consume RPM Browser Lite updates.
+            settings.AutomaticUpdates = false;
             settings.RestoreAllOnStart = null;
             settings.RestoreHibernatedOnlyOnClick = true;
             settings.QuickConsultCloseAfterMinutes = 15;
@@ -208,7 +210,7 @@ namespace ChatGPTLite
             if (UpdateManifestUrl == null)
                 UpdateManifestUrl = AppController.DefaultUpdateManifestUrl;
             if (!AutomaticUpdates.HasValue)
-                AutomaticUpdates = true;
+                AutomaticUpdates = false;
             if (!RestoreHibernatedOnlyOnClick.HasValue)
                 RestoreHibernatedOnlyOnClick = true;
             if (QuickConsultCloseAfterMinutes < 0 || QuickConsultCloseAfterMinutes > 240)

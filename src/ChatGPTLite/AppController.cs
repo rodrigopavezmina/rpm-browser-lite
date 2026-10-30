@@ -23,10 +23,11 @@ namespace ChatGPTLite
     internal sealed class AppController : ApplicationContext
     {
         public const string HomeUrl = "https://chatgpt.com/";
-        public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.33";
-        public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
-        private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
+        public const string ProductName = "RPM IA Job Apply Browser Lite Turbo";
+        public const string ProductVersion = "1.0.0";
+        // This edition has its own release line. Never inherit the standard
+        // browser update channel, otherwise its installer could replace Turbo.
+        public const string DefaultUpdateManifestUrl = "";
 
         private readonly AppPaths _paths;
         private readonly string _pipeName;
@@ -42,10 +43,11 @@ namespace ChatGPTLite
         private Task _extensionInstallTask;
         private LibraryForm _library;
         private SettingsForm _settings;
+        private JobApplicationProfile _jobApplicationProfile;
+        private bool _jobApplicationProfileLoaded;
         private bool _exiting;
         private bool _bookmarkBatch;
         private bool _bulkHibernateRunning;
-        private bool _defaultUpdateManifestApplied;
 
         public AppState State { get; private set; }
         public AppPaths Paths { get { return _paths; } }
@@ -62,16 +64,6 @@ namespace ChatGPTLite
             {
                 State = JsonStore.Load<AppState>(_paths.StateFile) ?? AppState.CreateDefault();
                 State.RepairDefaults();
-                // Existing installations created before the built-in update channel
-                // had an empty manifest URL. Keep their opt-in automatic updates
-                // working without requiring a manual configuration step.
-                if (State.Settings.AutomaticUpdates == true &&
-                    (string.IsNullOrWhiteSpace(State.Settings.UpdateManifestUrl) ||
-                     string.Equals(State.Settings.UpdateManifestUrl.Trim(), LegacyUpdateManifestUrl, StringComparison.OrdinalIgnoreCase)))
-                {
-                    State.Settings.UpdateManifestUrl = DefaultUpdateManifestUrl;
-                    _defaultUpdateManifestApplied = true;
-                }
             }
             catch (Exception ex)
             {
@@ -89,9 +81,6 @@ namespace ChatGPTLite
                 _saveTimer.Stop();
                 SaveNow();
             };
-            if (_defaultUpdateManifestApplied)
-                QueueSave();
-
             _libraryRefreshTimer = new System.Windows.Forms.Timer();
             _libraryRefreshTimer.Interval = 250;
             _libraryRefreshTimer.Tick += delegate
@@ -107,6 +96,8 @@ namespace ChatGPTLite
             trayMenu.Items.Add("✦ Quick Gemini · invisible", null, delegate { OpenQuickConsult(); });
             trayMenu.Items.Add("◈ Quick ChatGPT · private", null, delegate { OpenQuickChatGpt(); });
             trayMenu.Items.Add("◉ Quick Duck.ai · private", null, delegate { OpenQuickDuckAi(); });
+            trayMenu.Items.Add(new ToolStripSeparator());
+            trayMenu.Items.Add("⚡ Perfil de postulación…", null, delegate { ShowJobProfile(null); });
             trayMenu.Items.Add(new ToolStripSeparator());
             trayMenu.Items.Add("✚ New window", null, delegate { OpenWindow(HomeUrl, true); });
             trayMenu.Items.Add("▦ Windows and recent", null, delegate { ShowLibrary(); });
@@ -937,6 +928,122 @@ namespace ChatGPTLite
                 form.ShowDialog(_settings != null && !_settings.IsDisposed ? (IWin32Window)_settings : null);
         }
 
+        public bool ShowJobProfile(IWin32Window owner)
+        {
+            JobApplicationProfile current;
+            try
+            {
+                current = LoadJobApplicationProfile();
+            }
+            catch (JobApplyStoreException ex)
+            {
+                Log("No se pudo leer el perfil cifrado de postulación", ex);
+                string backup = string.IsNullOrWhiteSpace(ex.BackupPath)
+                    ? string.Empty
+                    : "\r\n\r\nSe conservó una copia en:\r\n" + ex.BackupPath;
+                DialogResult recovery = MessageBox.Show(
+                    owner,
+                    ex.Message + backup +
+                    "\r\n\r\n¿Quieres crear un perfil nuevo? El archivo dañado no se eliminará.",
+                    "Perfil de postulación",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (recovery != DialogResult.Yes)
+                    return false;
+                current = JobApplicationProfile.CreateDefault();
+                _jobApplicationProfile = current.Clone();
+                _jobApplicationProfileLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                Log("No se pudo abrir el perfil de postulación", ex);
+                MessageBox.Show(owner,
+                    "No se pudo abrir el perfil de postulación.\r\n\r\n" + ex.Message,
+                    "Perfil de postulación", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            using (JobProfileForm form = new JobProfileForm(current, State.Settings.DarkMode))
+            {
+                if (form.ShowDialog(owner) != DialogResult.OK)
+                    return false;
+                try
+                {
+                    JobApplicationProfile saved = form.Profile.Clone();
+                    saved.Normalize();
+                    JobApplyStore.Save(_paths.JobApplyProfileFile, saved);
+                    _jobApplicationProfile = saved;
+                    _jobApplicationProfileLoaded = true;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Log("No se pudo guardar el perfil cifrado de postulación", ex);
+                    MessageBox.Show(owner,
+                        "No se pudo guardar el perfil cifrado.\r\n\r\n" + ex.Message,
+                        "Perfil de postulación", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
+                }
+            }
+        }
+
+        public bool TryGetJobApplicationProfile(
+            IWin32Window owner,
+            bool promptIfIncomplete,
+            out JobApplicationProfile profile)
+        {
+            profile = null;
+            JobApplicationProfile current;
+            try
+            {
+                current = LoadJobApplicationProfile();
+            }
+            catch (Exception ex)
+            {
+                if (promptIfIncomplete)
+                    ShowJobProfile(owner);
+                else
+                    Log("No se pudo cargar el perfil para continuar la postulación", ex);
+                if (!_jobApplicationProfileLoaded || _jobApplicationProfile == null)
+                    return false;
+                current = _jobApplicationProfile;
+            }
+
+            string validationMessage;
+            if (!current.TryValidate(out validationMessage))
+            {
+                if (!promptIfIncomplete)
+                    return false;
+
+                DialogResult configure = MessageBox.Show(
+                    owner,
+                    "Configura una sola vez tus datos y el archivo de CV antes de completar postulaciones.\r\n\r\n" +
+                    validationMessage + "\r\n\r\n¿Abrir el perfil ahora?",
+                    "Postulación rápida",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+                if (configure != DialogResult.Yes || !ShowJobProfile(owner))
+                    return false;
+                current = _jobApplicationProfile;
+                if (current == null || !current.TryValidate(out validationMessage))
+                    return false;
+            }
+
+            profile = current.Clone();
+            return true;
+        }
+
+        private JobApplicationProfile LoadJobApplicationProfile()
+        {
+            if (!_jobApplicationProfileLoaded || _jobApplicationProfile == null)
+            {
+                _jobApplicationProfile = JobApplyStore.LoadOrCreateDefault(_paths.JobApplyProfileFile);
+                _jobApplicationProfileLoaded = true;
+            }
+            _jobApplicationProfile.Repair();
+            return _jobApplicationProfile.Clone();
+        }
+
         public void SettingsChanged()
         {
             QueueSave();
@@ -1138,8 +1245,8 @@ namespace ChatGPTLite
                 writer.WriteLine("<!DOCTYPE NETSCAPE-Bookmark-file-1>");
                 writer.WriteLine("<!-- This file can be imported by Chrome and other browsers. -->");
                 writer.WriteLine("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">");
-                writer.WriteLine("<TITLE>RPM Browser Lite Bookmarks</TITLE>");
-                writer.WriteLine("<H1>RPM Browser Lite Bookmarks</H1>");
+                writer.WriteLine("<TITLE>" + ProductName + " Bookmarks</TITLE>");
+                writer.WriteLine("<H1>" + ProductName + " Bookmarks</H1>");
                 writer.WriteLine("<DL><p>");
                 WriteBookmarkEntries(writer, State.Bookmarks.Where(delegate(BookmarkRecord item) { return string.IsNullOrWhiteSpace(item.FolderPath); }));
                 WriteBookmarkFolders(writer, string.Empty, State.Bookmarks);
@@ -1400,7 +1507,7 @@ namespace ChatGPTLite
                 string json;
                 using (WebClient client = new WebClient())
                 {
-                    client.Headers[HttpRequestHeader.UserAgent] = "RPMBrowserLite/" + ProductVersion;
+                    client.Headers[HttpRequestHeader.UserAgent] = "RPMIAJobApplyBrowserLiteTurbo/" + ProductVersion;
                     Uri manifestUri = new Uri(url);
                     json = await client.DownloadStringTaskAsync(manifestUri);
                     if (IsOfficialApiManifestUrl(manifestUri))
@@ -1483,12 +1590,12 @@ namespace ChatGPTLite
         private async Task DownloadAndInstallUpdateAsync(UpdateManifest manifest)
         {
             string safeVersion = Regex.Replace(manifest.Version ?? ProductVersion, "[^0-9A-Za-z.-]", string.Empty);
-            string installerPath = Path.Combine(Path.GetTempPath(), "RPMBrowserLite-update-" + safeVersion + ".exe");
+            string installerPath = Path.Combine(Path.GetTempPath(), "RPMIAJobApplyBrowserLiteTurbo-update-" + safeVersion + ".exe");
             try
             {
                 using (WebClient client = new WebClient())
                 {
-                    client.Headers[HttpRequestHeader.UserAgent] = "RPMBrowserLite/" + ProductVersion;
+                    client.Headers[HttpRequestHeader.UserAgent] = "RPMIAJobApplyBrowserLiteTurbo/" + ProductVersion;
                     await client.DownloadFileTaskAsync(new Uri(manifest.DownloadUrl), installerPath);
                 }
                 using (SHA256 sha = SHA256.Create())
@@ -1740,7 +1847,7 @@ namespace ChatGPTLite
                 }
             });
             thread.IsBackground = true;
-            thread.Name = "ChatGPT Lite IPC";
+            thread.Name = "RPM IA Job Apply Browser Lite Turbo IPC";
             thread.Start();
         }
 

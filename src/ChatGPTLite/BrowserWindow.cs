@@ -54,6 +54,7 @@ namespace ChatGPTLite
         private readonly Button _forwardButton;
         private readonly Button _reloadButton;
         private readonly Button _downloadsButton;
+        private readonly Button _jobApplyButton;
         private readonly Button _copyModeButton;
         private readonly Button _cloneButton;
         private readonly Button _newBookmarkButton;
@@ -107,6 +108,10 @@ namespace ChatGPTLite
         private bool _caffeinePulsePhase;
         private bool _hibernatePulsePhase;
         private bool _copyModeEnabled;
+        private bool _jobApplySessionActive;
+        private bool _jobApplyContinuationRunning;
+        private string _jobApplySessionHost;
+        private DateTime _jobApplySessionStartedUtc;
         private bool _startDashboardVisible;
         private bool _startAddressEditPrepared;
         private int _startDashboardSecondsRemaining;
@@ -191,6 +196,7 @@ namespace ChatGPTLite
             _forwardButton = CreateToolbarButton("›", 40);
             _reloadButton = CreateToolbarButton("↻", 40);
             _downloadsButton = CreateToolbarButton("⇩", 40);
+            _jobApplyButton = CreateToolbarButton("⚡", 48);
             _copyModeButton = CreateToolbarButton("⧉", 40);
             _cloneButton = CreateToolbarButton("⧈", 40);
             Button homeButton = CreateToolbarButton("⌂", 40);
@@ -247,6 +253,7 @@ namespace ChatGPTLite
             AddToolbarAction(_backButton, "‹ Back");
             AddToolbarAction(_forwardButton, "› Forward");
             AddToolbarAction(_reloadButton, "↻ Reload");
+            AddToolbarAction(_jobApplyButton, "⚡ Postular · completar formulario (Ctrl+Shift+A)");
             AddToolbarAction(_downloadsButton, "⇩ Downloads (Ctrl+J)");
             AddToolbarAction(_copyModeButton, "⧉ Copy mode: enable text selection");
             AddToolbarAction(_notesButton, "✎ Show or hide notes");
@@ -404,6 +411,7 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(_urlDragButton, "Drag this URL to the bookmarks bar or a folder in Google Chrome");
             _toolTip.SetToolTip(homeButton, "Default home page (Ctrl+N)");
             _toolTip.SetToolTip(newButton, "New window (Ctrl+Shift+N)");
+            _toolTip.SetToolTip(_jobApplyButton, "Completar esta postulación desde tu perfil local (Ctrl+Shift+A)");
             _toolTip.SetToolTip(_notesButton, "Show or hide attached notes (Ctrl+Shift+M)");
             _toolTip.SetToolTip(_newBookmarkButton, "Add the current page to bookmarks");
             _toolTip.SetToolTip(_trayShortcutButton, "Keep or remove this page as an icon beside the clock");
@@ -422,6 +430,7 @@ namespace ChatGPTLite
             _forwardButton.Click += delegate { if (CoreWebView2 != null && CoreWebView2.CanGoForward) CoreWebView2.GoForward(); };
             _reloadButton.Click += delegate { if (CoreWebView2 != null) CoreWebView2.Reload(); else BeginRestore(); };
             _downloadsButton.Click += async delegate { await OpenDownloadsAsync(); };
+            _jobApplyButton.Click += async delegate { await PrepareJobApplicationAsync(); };
             _copyModeButton.Click += async delegate { await ToggleCopyModeAsync(); };
             _cloneButton.Click += delegate { _app.CloneWindow(this, true); };
             _appearanceButton.Click += delegate { ShowCustomization(); };
@@ -1550,6 +1559,11 @@ namespace ChatGPTLite
                     BeginRestore();
                 return true;
             }
+            if (keyData == (Keys.Control | Keys.Shift | Keys.A))
+            {
+                BeginInvoke((MethodInvoker)async delegate { await PrepareJobApplicationAsync(); });
+                return true;
+            }
             if (keyData == (Keys.Control | Keys.J))
             {
                 BeginInvoke((MethodInvoker)async delegate { await OpenDownloadsAsync(); });
@@ -1580,6 +1594,134 @@ namespace ChatGPTLite
             {
                 _app.Log("No se pudo abrir la ventana de descargas", ex);
             }
+        }
+
+        private Task PrepareJobApplicationAsync()
+        {
+            return PrepareJobApplicationAsync(false);
+        }
+
+        private async Task PrepareJobApplicationAsync(bool continuation)
+        {
+            if ((_jobApplyButton != null && !_jobApplyButton.Enabled) ||
+                (continuation && _jobApplyContinuationRunning))
+                return;
+
+            JobApplicationProfile profile;
+            if (!_app.TryGetJobApplicationProfile(this, !continuation, out profile))
+            {
+                if (continuation)
+                    _jobApplySessionActive = false;
+                return;
+            }
+
+            ResumeAttachResult resumeResult = null;
+            try
+            {
+                if (continuation)
+                    _jobApplyContinuationRunning = true;
+                else
+                    _jobApplyButton.Enabled = false;
+                _statusLabel.Text = continuation ? "Completando la página siguiente…" : "Analizando postulación…";
+                await EnsureBrowserReadyAsync(true);
+                if (CoreWebView2 == null)
+                    throw new InvalidOperationException("El navegador todavía no está listo.");
+
+                JobApplyResult result = await JobApplyEngine.FillAsync(CoreWebView2, profile);
+                if (result.HasError)
+                    throw new InvalidOperationException(result.Error);
+
+                if (result.ResumeFieldFound && !string.IsNullOrWhiteSpace(profile.ResumePath))
+                    resumeResult = await JobApplyEngine.AttachResumeAsync(CoreWebView2, profile.ResumePath);
+
+                if (!continuation)
+                {
+                    _jobApplySessionHost = GetJobApplyHost(CoreWebView2.Source ?? Record.Url);
+                    _jobApplySessionActive = !string.IsNullOrWhiteSpace(_jobApplySessionHost);
+                    _jobApplySessionStartedUtc = DateTime.UtcNow;
+                }
+                _statusLabel.Text = result.FilledCount.ToString() + " campos listos · " +
+                    result.ReviewCount.ToString() + " por revisar";
+                if (!continuation)
+                    ShowJobApplySummary(result, resumeResult, profile);
+            }
+            catch (Exception ex)
+            {
+                if (continuation)
+                {
+                    _jobApplySessionActive = false;
+                    _statusLabel.Text = "Autollenado detenido · usa ⚡ para reintentar";
+                    _app.Log("No se pudo continuar la postulación multipágina", ex);
+                    return;
+                }
+                _statusLabel.Text = "No se pudo completar la postulación";
+                _app.Log("No se pudo preparar la postulación", ex);
+                MessageBox.Show(
+                    this,
+                    "No se pudo completar este formulario.\r\n\r\n" + ex.Message +
+                    "\r\n\r\nEl sitio no fue enviado ni se modificó tu perfil.",
+                    "Postulación rápida",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                _jobApplyContinuationRunning = false;
+                if (_jobApplyButton != null && !_jobApplyButton.IsDisposed)
+                    _jobApplyButton.Enabled = true;
+            }
+        }
+
+        private static string GetJobApplyHost(string url)
+        {
+            Uri uri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return string.Empty;
+            return uri.Scheme + "://" + uri.Host + (uri.IsDefaultPort ? string.Empty : ":" + uri.Port.ToString());
+        }
+
+        private void ShowJobApplySummary(JobApplyResult result, ResumeAttachResult resumeResult, JobApplicationProfile profile)
+        {
+            StringBuilder summary = new StringBuilder();
+            if (result.FilledCount == 0 && result.ReviewCount == 0)
+                summary.AppendLine("No se encontraron campos compatibles para completar en esta página.");
+            else
+            {
+                summary.AppendLine("Completados: " + result.FilledCount.ToString());
+                summary.AppendLine("Revisar: " + result.ReviewCount.ToString());
+                summary.AppendLine("Omitidos o protegidos: " + result.SkippedCount.ToString());
+            }
+
+            if (resumeResult != null)
+                summary.AppendLine(resumeResult.Success ? resumeResult.Message : "CV pendiente: " + resumeResult.Message);
+            else if (result.ResumeFieldFound && string.IsNullOrWhiteSpace(profile.ResumePath))
+                summary.AppendLine("CV pendiente: configura el archivo en tu perfil.");
+
+            AppendJobApplyLabels(summary, "Revisa especialmente", result.Review);
+            summary.AppendLine();
+            summary.AppendLine("Los campos amarillos necesitan revisión. La aplicación nunca pulsa Enviar por ti.");
+
+            MessageBox.Show(
+                this,
+                summary.ToString().Trim(),
+                "Postulación preparada",
+                MessageBoxButtons.OK,
+                result.ReviewCount > 0 || (resumeResult != null && !resumeResult.Success)
+                    ? MessageBoxIcon.Warning
+                    : MessageBoxIcon.Information);
+        }
+
+        private static void AppendJobApplyLabels(StringBuilder summary, string heading, IList<string> labels)
+        {
+            if (summary == null || labels == null || labels.Count == 0)
+                return;
+            summary.AppendLine();
+            summary.AppendLine(heading + ":");
+            foreach (string label in labels.Where(delegate(string value) { return !string.IsNullOrWhiteSpace(value); }).Take(7))
+                summary.AppendLine("• " + label.Trim());
+            if (labels.Count > 7)
+                summary.AppendLine("• … y " + (labels.Count - 7).ToString() + " más");
         }
 
         private async Task InitializeBrowserAsync(bool navigate)
@@ -1714,6 +1856,7 @@ namespace ChatGPTLite
                 "var allow=function(e){if(window.__rpmCopyMode)e.stopImmediatePropagation();};" +
                 "document.addEventListener('selectstart',allow,true);document.addEventListener('copy',allow,true);" +
                 "document.addEventListener('cut',allow,true);document.addEventListener('contextmenu',allow,true);})();");
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(JobApplyEngine.Script);
 
             core.FaviconChanged += async delegate
             {
@@ -1723,6 +1866,13 @@ namespace ChatGPTLite
             core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs args)
             {
                 MarkUserActivity();
+                if (_jobApplySessionActive &&
+                    ((DateTime.UtcNow - _jobApplySessionStartedUtc).TotalMinutes > 45 ||
+                     !string.Equals(GetJobApplyHost(args.Uri), _jobApplySessionHost, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _jobApplySessionActive = false;
+                    _jobApplySessionHost = string.Empty;
+                }
                 Uri uri;
                 if (Uri.TryCreate(args.Uri, UriKind.Absolute, out uri) &&
                     uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != "about")
@@ -1751,6 +1901,9 @@ namespace ChatGPTLite
                 SaveCurrentPage();
                 if (_addressBox == null || !_addressBox.Focused)
                     RefreshAddressSuggestions();
+                if (args.IsSuccess && _jobApplySessionActive &&
+                    string.Equals(GetJobApplyHost(core.Source), _jobApplySessionHost, StringComparison.OrdinalIgnoreCase))
+                    await PrepareJobApplicationAsync(true);
             };
             core.SourceChanged += delegate
             {
@@ -1893,7 +2046,7 @@ namespace ChatGPTLite
                     if (request == null)
                         return false;
                     request.Method = "GET";
-                    request.UserAgent = "RPMBrowserLite favicon cache";
+                    request.UserAgent = "RPMIAJobApplyBrowserLiteTurbo favicon cache";
                     request.Accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
                     request.AllowAutoRedirect = true;
                     request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;

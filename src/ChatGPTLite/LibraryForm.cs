@@ -935,7 +935,7 @@ namespace ChatGPTLite
             {
                 dialog.Title = "Export bookmarks";
                 dialog.Filter = "HTML bookmarks (*.html)|*.html";
-                dialog.FileName = "RPM Browser Lite Bookmarks.html";
+                dialog.FileName = "RPM IA Job Apply Browser Lite Turbo Bookmarks.html";
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                     return;
                 try

@@ -74,12 +74,12 @@ namespace ChatGPTLite
             _restoreWindows.Location = new Point(29, 211);
 
             _keepInTray = new CheckBox();
-            _keepInTray.Text = "Keep RPM Browser Lite available near the clock when windows are closed";
+            _keepInTray.Text = "Keep RPM IA Job Apply Browser Lite Turbo available near the clock when windows are closed";
             _keepInTray.AutoSize = true;
             _keepInTray.Location = new Point(29, 242);
 
             _darkMode = new CheckBox();
-            _darkMode.Text = "Use dark mode for the RPM Browser Lite interface";
+            _darkMode.Text = "Use dark mode for the RPM IA Job Apply Browser Lite Turbo interface";
             _darkMode.AutoSize = true;
             _darkMode.Location = new Point(29, 269);
             _darkMode.CheckedChanged += DarkModeChanged;
@@ -145,6 +145,12 @@ namespace ChatGPTLite
 
             Label storageHeading = LabelAt("Cache and updates", 24, 680, 400);
             storageHeading.Font = new Font("Segoe UI Semibold", 13f, FontStyle.Bold);
+
+            Button jobProfile = new Button();
+            jobProfile.Text = "Perfil de postulación…";
+            jobProfile.AutoSize = true;
+            jobProfile.Location = new Point(292, 675);
+            jobProfile.Click += delegate { _app.ShowJobProfile(this); };
 
             Button extensions = new Button();
             extensions.Text = "Edge extensions…";
@@ -266,6 +272,7 @@ namespace ChatGPTLite
             Controls.Add(startDelaySuffix);
             Controls.Add(startHint);
             Controls.Add(storageHeading);
+            Controls.Add(jobProfile);
             Controls.Add(extensions);
             Controls.Add(cacheLabel);
             Controls.Add(_cacheMb);

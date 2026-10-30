@@ -23,7 +23,7 @@ namespace ChatGPTLite
             Application.ThreadException += OnThreadException;
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
-            string pipeName = "RPMBrowserLite-" + Environment.UserName;
+            string pipeName = "RPMIAJobApplyBrowserLiteTurbo-" + Environment.UserName;
             string command = args.FirstOrDefault(delegate(string value) { return value.StartsWith("--", StringComparison.Ordinal); });
             string initialUrl = args.FirstOrDefault(delegate(string value) { return !value.StartsWith("--", StringComparison.Ordinal); });
             if (string.Equals(command, "--show-manager", StringComparison.OrdinalIgnoreCase))
@@ -34,7 +34,7 @@ namespace ChatGPTLite
                 initialUrl = "@hibernate-all";
 
             bool ownsMutex;
-            using (Mutex mutex = new Mutex(true, "Local\\RPMBrowserLite", out ownsMutex))
+            using (Mutex mutex = new Mutex(true, "Local\\RPMIAJobApplyBrowserLiteTurbo", out ownsMutex))
             {
                 if (ownsMutex && string.Equals(initialUrl, "@exit", StringComparison.Ordinal))
                     return;
@@ -63,7 +63,7 @@ namespace ChatGPTLite
         {
             WriteFatalLog(args == null ? null : args.Exception);
             MessageBox.Show(
-                "RPM Browser Lite encontró un problema recuperable. La sesión guardada se conserva y puedes continuar desde el administrador.",
+                AppController.ProductName + " encontró un problema recuperable. La sesión guardada se conserva y puedes continuar desde el administrador.",
                 AppController.ProductName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);

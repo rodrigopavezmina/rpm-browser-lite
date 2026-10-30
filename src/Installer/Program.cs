@@ -7,34 +7,28 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("RPM Browser Lite Setup")]
-[assembly: AssemblyProduct("RPM Browser Lite")]
-[assembly: AssemblyVersion("2.8.33.0")]
-[assembly: AssemblyFileVersion("2.8.33.0")]
+[assembly: AssemblyTitle("RPM IA Job Apply Browser Lite Turbo Setup")]
+[assembly: AssemblyProduct("RPM IA Job Apply Browser Lite Turbo")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
 
 namespace ChatGPTLiteInstaller
 {
     internal static class Program
     {
-        internal const string ProductName = "RPM Browser Lite";
-        private const string ProductVersion = "2.8.33";
-        private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM Browser Lite";
-        private const string LegacyProductName = "ChatGPT Lite";
+        internal const string ProductName = "RPM IA Job Apply Browser Lite Turbo";
+        private const string ProductVersion = "1.0.0";
+        private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM IA Job Apply Browser Lite Turbo";
+        private const string ApplicationExecutable = "RPMIAJobApplyBrowserLiteTurbo.exe";
         private static readonly string[] PayloadFiles = new string[]
         {
-            "RPMBrowserLite.exe",
-            "RPMBrowserLite.exe.config",
+            ApplicationExecutable,
+            "RPMIAJobApplyBrowserLiteTurbo.exe.config",
             "Microsoft.Web.WebView2.Core.dll",
             "Microsoft.Web.WebView2.WinForms.dll",
             "WebView2Loader.dll",
             "LEEME.md"
         };
-        private static readonly string[] LegacyBinaryFiles = new string[]
-        {
-            "ChatGPTLite.exe",
-            "ChatGPTLite.exe.config"
-        };
-
         [STAThread]
         private static void Main(string[] args)
         {
@@ -72,8 +66,7 @@ namespace ChatGPTLiteInstaller
                         string registered = key == null ? null : key.GetValue("InstallLocation") as string;
                         if (!string.IsNullOrWhiteSpace(registered) &&
                             Directory.Exists(registered) &&
-                            registered.StartsWith(programs, StringComparison.OrdinalIgnoreCase) &&
-                            !string.Equals(Path.GetFileName(registered), LegacyProductName, StringComparison.OrdinalIgnoreCase))
+                            registered.StartsWith(programs, StringComparison.OrdinalIgnoreCase))
                             return registered;
                     }
                 }
@@ -82,8 +75,6 @@ namespace ChatGPTLiteInstaller
                     // Fall through to the standard renamed folder.
                 }
 
-                // Never return to the old ChatGPT Lite folder.  It can remain from an
-                // older release without taking over current RPM Browser Lite updates.
                 return Path.Combine(programs, ProductName);
             }
         }
@@ -106,18 +97,8 @@ namespace ChatGPTLiteInstaller
                 directory = GetFallbackInstallDirectory();
                 WritePayloadFiles(directory);
             }
-            foreach (string legacyFile in LegacyBinaryFiles)
-            {
-                string legacyPath = Path.Combine(directory, legacyFile);
-                if (File.Exists(legacyPath))
-                    File.Delete(legacyPath);
-            }
-
-            string uninstaller = Path.Combine(directory, "Uninstall RPM Browser Lite.exe");
+            string uninstaller = Path.Combine(directory, "Uninstall " + ProductName + ".exe");
             File.Copy(Assembly.GetExecutingAssembly().Location, uninstaller, true);
-            string legacyUninstaller = Path.Combine(directory, "Desinstalar ChatGPT Lite.exe");
-            if (File.Exists(legacyUninstaller))
-                File.Delete(legacyUninstaller);
             CreateShortcuts(directory, desktopShortcut, uninstaller);
             RegisterUninstaller(directory, uninstaller);
 
@@ -166,7 +147,7 @@ namespace ChatGPTLiteInstaller
 
         private static void LaunchApplication(string directory)
         {
-            string executable = Path.Combine(directory, "RPMBrowserLite.exe");
+            string executable = Path.Combine(directory, ApplicationExecutable);
             if (!File.Exists(executable))
                 throw new FileNotFoundException("No se encontrÃ³ la aplicaciÃ³n instalada.", executable);
             Process.Start(new ProcessStartInfo
@@ -183,7 +164,7 @@ namespace ChatGPTLiteInstaller
             if (IsApplicationRunning())
             {
                 MessageBox.Show(
-                    "Cierra ChatGPT Lite desde su icono junto al reloj antes de desinstalar.",
+                    "Cierra " + ProductName + " desde su icono junto al reloj antes de desinstalar.",
                     ProductName,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
@@ -191,7 +172,7 @@ namespace ChatGPTLiteInstaller
             }
 
             DialogResult answer = MessageBox.Show(
-                "¿Desinstalar ChatGPT Lite?\r\n\r\nTu sesión, caché y lista local se conservarán para que puedas reinstalar sin perderlos.",
+                "¿Desinstalar " + ProductName + "?\r\n\r\nTu sesión, caché y lista local se conservarán para que puedas reinstalar sin perderlos.",
                 "Desinstalar " + ProductName,
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -200,7 +181,6 @@ namespace ChatGPTLiteInstaller
 
             string directory = InstallDirectory;
             RemoveShortcuts();
-            RemoveLegacyShortcuts();
             try
             {
                 Registry.CurrentUser.DeleteSubKeyTree(RegistryKeyName, false);
@@ -214,19 +194,13 @@ namespace ChatGPTLiteInstaller
                 try { File.Delete(Path.Combine(directory, file)); }
                 catch { }
             }
-            foreach (string file in LegacyBinaryFiles)
-            {
-                try { File.Delete(Path.Combine(directory, file)); }
-                catch { }
-            }
-
             string self = Assembly.GetExecutingAssembly().Location;
             MoveFileEx(self, null, MoveFileFlags.DelayUntilReboot);
             MoveFileEx(directory, null, MoveFileFlags.DelayUntilReboot);
 
             MessageBox.Show(
-                "RPM Browser Lite fue desinstalado.\r\n\r\nLos datos locales se conservaron en:\r\n" +
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatGPT Lite"),
+                ProductName + " fue desinstalado.\r\n\r\nLos datos locales se conservaron en:\r\n" +
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductName),
                 ProductName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -237,14 +211,13 @@ namespace ChatGPTLiteInstaller
             string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
             string group = Path.Combine(programs, ProductName);
             Directory.CreateDirectory(group);
-            string app = Path.Combine(directory, "RPMBrowserLite.exe");
-            CreateShortcut(Path.Combine(group, ProductName + ".lnk"), app, directory, "Lightweight browser with hibernatable windows");
+            string app = Path.Combine(directory, ApplicationExecutable);
+            CreateShortcut(Path.Combine(group, ProductName + ".lnk"), app, directory, "Job application browser with assisted form filling");
             CreateShortcut(Path.Combine(group, "Uninstall " + ProductName + ".lnk"), uninstaller, directory, "Uninstall " + ProductName, "/uninstall");
 
             string desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), ProductName + ".lnk");
             if (desktopShortcut || !File.Exists(desktop))
-                CreateShortcut(desktop, app, directory, "Lightweight browser with hibernatable windows");
-            RemoveLegacyShortcuts();
+                CreateShortcut(desktop, app, directory, "Job application browser with assisted form filling");
         }
 
         private static void RemoveShortcuts()
@@ -271,28 +244,9 @@ namespace ChatGPTLiteInstaller
             }
         }
 
-        private static void RemoveLegacyShortcuts()
-        {
-            try
-            {
-                string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-                string legacyGroup = Path.Combine(programs, LegacyProductName);
-                string legacyApp = Path.Combine(legacyGroup, LegacyProductName + ".lnk");
-                string legacyUninstall = Path.Combine(legacyGroup, "Desinstalar ChatGPT Lite.lnk");
-                if (File.Exists(legacyApp)) File.Delete(legacyApp);
-                if (File.Exists(legacyUninstall)) File.Delete(legacyUninstall);
-                if (Directory.Exists(legacyGroup) && Directory.GetFileSystemEntries(legacyGroup).Length == 0) Directory.Delete(legacyGroup);
-                string legacyDesktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), LegacyProductName + ".lnk");
-                if (File.Exists(legacyDesktop)) File.Delete(legacyDesktop);
-            }
-            catch
-            {
-            }
-        }
-
         private static bool IsApplicationRunning()
         {
-            return HasLiveApplicationProcess("RPMBrowserLite");
+            return HasLiveApplicationProcess(Path.GetFileNameWithoutExtension(ApplicationExecutable));
         }
 
         private static bool HasLiveApplicationProcess(string processName)
@@ -312,7 +266,7 @@ namespace ChatGPTLiteInstaller
                     if (!string.IsNullOrWhiteSpace(imagePath) &&
                         string.Equals(
                             Path.GetFullPath(imagePath),
-                            Path.GetFullPath(Path.Combine(InstallDirectory, "RPMBrowserLite.exe")),
+                            Path.GetFullPath(Path.Combine(InstallDirectory, ApplicationExecutable)),
                             StringComparison.OrdinalIgnoreCase))
                         return true;
                 }
@@ -364,7 +318,7 @@ namespace ChatGPTLiteInstaller
                 key.SetValue("DisplayVersion", ProductVersion, RegistryValueKind.String);
                 key.SetValue("Publisher", ProductName, RegistryValueKind.String);
                 key.SetValue("InstallLocation", directory, RegistryValueKind.String);
-                key.SetValue("DisplayIcon", Path.Combine(directory, "RPMBrowserLite.exe") + ",0", RegistryValueKind.String);
+                key.SetValue("DisplayIcon", Path.Combine(directory, ApplicationExecutable) + ",0", RegistryValueKind.String);
                 key.SetValue("UninstallString", "\"" + uninstaller + "\" /uninstall", RegistryValueKind.String);
                 key.SetValue("NoModify", 1, RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);

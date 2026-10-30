@@ -84,7 +84,7 @@ namespace ChatGPTLite
             open.Click += delegate { OpenSelected(); };
 
             _status = new Label();
-            _status.Text = "Changes are applied the next time RPM Browser Lite starts.";
+            _status.Text = "Changes are applied the next time RPM IA Job Apply Browser Lite Turbo starts.";
             _status.AutoSize = false;
             _status.Size = new Size(630, 40);
             _status.Location = new Point(25, 346);
@@ -184,7 +184,7 @@ namespace ChatGPTLite
             _app.State.Settings.BrowserExtensionPaths = _workingPaths.ToList();
             _app.SaveNow();
             MessageBox.Show(this,
-                "Extension settings saved. Restart RPM Browser Lite to load or unload extensions.",
+                "Extension settings saved. Restart RPM IA Job Apply Browser Lite Turbo to load or unload extensions.",
                 "Extensions", MessageBoxButtons.OK, MessageBoxIcon.Information);
             Close();
         }
