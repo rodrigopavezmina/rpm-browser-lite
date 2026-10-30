@@ -9,8 +9,59 @@ using System.Text;
 namespace ChatGPTLite
 {
     [DataContract]
+    internal sealed class JobApplicationFieldMetadata
+    {
+        // ApprovedAtUtc is an ISO-8601 UTC string. Keeping it textual preserves
+        // compatibility with JavaScriptSerializer and makes absent dates safe.
+        [DataMember(Order = 1)] public string NormalizedValue { get; set; }
+        [DataMember(Order = 2)] public string Source { get; set; }
+        [DataMember(Order = 3)] public double Confidence { get; set; }
+        [DataMember(Order = 4)] public string ApprovedAtUtc { get; set; }
+        [DataMember(Order = 5)] public string Sensitivity { get; set; }
+        [DataMember(Order = 6)] public string OriginalEvidence { get; set; }
+
+        public void Repair()
+        {
+            NormalizedValue = ValueOrEmpty(NormalizedValue);
+            Source = ValueOrEmpty(Source);
+            ApprovedAtUtc = ValueOrEmpty(ApprovedAtUtc);
+            Sensitivity = ValueOrEmpty(Sensitivity).ToLowerInvariant();
+            OriginalEvidence = ValueOrEmpty(OriginalEvidence);
+            if (double.IsNaN(Confidence) || double.IsInfinity(Confidence)) Confidence = 0;
+            if (Confidence < 0) Confidence = 0;
+            if (Confidence > 1) Confidence = 1;
+            if (Source.Length == 0) Source = "unknown";
+            if (Sensitivity.Length == 0) Sensitivity = "unknown";
+        }
+
+        public JobApplicationFieldMetadata Clone()
+        {
+            Repair();
+            return new JobApplicationFieldMetadata
+            {
+                NormalizedValue = NormalizedValue,
+                Source = Source,
+                Confidence = Confidence,
+                ApprovedAtUtc = ApprovedAtUtc,
+                Sensitivity = Sensitivity,
+                OriginalEvidence = OriginalEvidence
+            };
+        }
+
+        private static string ValueOrEmpty(string value)
+        {
+            return value ?? string.Empty;
+        }
+    }
+
+    [DataContract]
     internal sealed class JobApplicationProfile
     {
+        internal const int CurrentMetadataSchemaVersion = 2;
+
+        // Legacy scalar properties remain the source of truth for the UI and
+        // page matcher. FieldMetadata is additive and lazily migrated by Repair.
+
         [DataMember(Order = 1)] public string FirstName { get; set; }
         [DataMember(Order = 2)] public string MiddleName { get; set; }
         [DataMember(Order = 3)] public string LastName { get; set; }
@@ -41,6 +92,8 @@ namespace ChatGPTLite
         [DataMember(Order = 28)] public string DesiredRole { get; set; }
         [DataMember(Order = 29)] public string WorkMode { get; set; }
         [DataMember(Order = 30)] public string EmploymentType { get; set; }
+        [DataMember(Order = 31)] public Dictionary<string, JobApplicationFieldMetadata> FieldMetadata { get; set; }
+        [DataMember(Order = 32)] public int MetadataSchemaVersion { get; set; }
 
         public static JobApplicationProfile CreateDefault()
         {
@@ -93,6 +146,144 @@ namespace ChatGPTLite
             {
                 if (education != null) education.Repair();
             }
+
+            RepairFieldMetadata();
+        }
+
+        private void RepairFieldMetadata()
+        {
+            if (FieldMetadata == null)
+                FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, JobApplicationFieldMetadata> item in FieldMetadata)
+            {
+                if (item.Value != null) item.Value.Repair();
+            }
+
+            EnsureFieldMetadata("FirstName", FirstName, NormalizeWords(FirstName), "personal");
+            EnsureFieldMetadata("MiddleName", MiddleName, NormalizeWords(MiddleName), "personal");
+            EnsureFieldMetadata("LastName", LastName, NormalizeWords(LastName), "personal");
+            EnsureFieldMetadata("PreferredName", PreferredName, NormalizeWords(PreferredName), "personal");
+            EnsureFieldMetadata("Email", Email, Email.Trim().ToLowerInvariant(), "sensitive");
+            EnsureFieldMetadata("Phone", Phone, NormalizeWords(Phone), "sensitive");
+            EnsureFieldMetadata("AddressLine1", AddressLine1, NormalizeWords(AddressLine1), "high");
+            EnsureFieldMetadata("AddressLine2", AddressLine2, NormalizeWords(AddressLine2), "high");
+            EnsureFieldMetadata("City", City, NormalizeWords(City), "personal");
+            EnsureFieldMetadata("Region", Region, NormalizeWords(Region), "personal");
+            EnsureFieldMetadata("PostalCode", PostalCode, NormalizeWords(PostalCode), "sensitive");
+            EnsureFieldMetadata("Country", Country, NormalizeWords(Country), "personal");
+            EnsureFieldMetadata("LinkedInUrl", LinkedInUrl, NormalizeUrl(LinkedInUrl), "sensitive");
+            EnsureFieldMetadata("PortfolioUrl", PortfolioUrl, NormalizeUrl(PortfolioUrl), "sensitive");
+            EnsureFieldMetadata("GitHubUrl", GitHubUrl, NormalizeUrl(GitHubUrl), "sensitive");
+            EnsureFieldMetadata("CurrentTitle", CurrentTitle, NormalizeWords(CurrentTitle), "professional");
+            EnsureFieldMetadata("DesiredRole", DesiredRole, NormalizeWords(DesiredRole), "professional");
+            if (YearsExperience > 0)
+                EnsureFieldMetadata("YearsExperience", YearsExperience.ToString(CultureInfo.InvariantCulture), YearsExperience.ToString(CultureInfo.InvariantCulture), "professional");
+            EnsureFieldMetadata("WorkAuthorization", WorkAuthorization, NormalizeWords(WorkAuthorization), "sensitive");
+            EnsureFieldMetadata("AvailableStartDate", AvailableStartDate, NormalizeDate(AvailableStartDate), "personal");
+            EnsureFieldMetadata("SalaryExpectation", SalaryExpectation, NormalizeWords(SalaryExpectation), "sensitive");
+            EnsureFieldMetadata("Skills", Skills, NormalizeMultiline(Skills), "professional");
+            EnsureFieldMetadata("ResumePath", ResumePath, ResumePath.Trim().Trim('"'), "high");
+            EnsureFieldMetadata("WorkMode", WorkMode, NormalizeWords(WorkMode), "personal");
+            EnsureFieldMetadata("EmploymentType", EmploymentType, NormalizeWords(EmploymentType), "professional");
+            if (RequiresSponsorship)
+                EnsureFieldMetadata("RequiresSponsorship", "true", "true", "sensitive");
+            if (WillingToRelocate)
+                EnsureFieldMetadata("WillingToRelocate", "true", "true", "personal");
+            if (OverwriteExisting)
+                EnsureFieldMetadata("OverwriteExisting", "true", "true", "normal");
+
+            for (int index = 0; index < Experiences.Count; index++)
+            {
+                JobExperience experience = Experiences[index];
+                if (experience == null) continue;
+                string prefix = "Experiences[" + index.ToString(CultureInfo.InvariantCulture) + "].";
+                EnsureFieldMetadata(prefix + "Company", experience.Company, NormalizeWords(experience.Company), "professional");
+                EnsureFieldMetadata(prefix + "Title", experience.Title, NormalizeWords(experience.Title), "professional");
+                EnsureFieldMetadata(prefix + "Location", experience.Location, NormalizeWords(experience.Location), "personal");
+                EnsureFieldMetadata(prefix + "StartDate", experience.StartDate, NormalizeMonth(experience.StartDate), "professional");
+                EnsureFieldMetadata(prefix + "EndDate", experience.EndDate, NormalizeMonth(experience.EndDate), "professional");
+                EnsureFieldMetadata(prefix + "Description", experience.Description, NormalizeMultiline(experience.Description), "professional");
+                if (experience.IsCurrent)
+                    EnsureFieldMetadata(prefix + "IsCurrent", "true", "true", "professional");
+            }
+            for (int index = 0; index < Education.Count; index++)
+            {
+                JobEducation education = Education[index];
+                if (education == null) continue;
+                string prefix = "Education[" + index.ToString(CultureInfo.InvariantCulture) + "].";
+                EnsureFieldMetadata(prefix + "Institution", education.Institution, NormalizeWords(education.Institution), "professional");
+                EnsureFieldMetadata(prefix + "Degree", education.Degree, NormalizeWords(education.Degree), "professional");
+                EnsureFieldMetadata(prefix + "FieldOfStudy", education.FieldOfStudy, NormalizeWords(education.FieldOfStudy), "professional");
+                EnsureFieldMetadata(prefix + "StartDate", education.StartDate, NormalizeMonth(education.StartDate), "professional");
+                EnsureFieldMetadata(prefix + "EndDate", education.EndDate, NormalizeMonth(education.EndDate), "professional");
+            }
+
+            MetadataSchemaVersion = CurrentMetadataSchemaVersion;
+        }
+
+        public JobApplicationFieldMetadata GetFieldMetadata(string fieldName)
+        {
+            Repair();
+            if (string.IsNullOrWhiteSpace(fieldName)) return null;
+            JobApplicationFieldMetadata metadata;
+            return FieldMetadata.TryGetValue(fieldName.Trim(), out metadata) && metadata != null
+                ? metadata.Clone()
+                : null;
+        }
+
+        public void SetFieldMetadata(string fieldName, JobApplicationFieldMetadata metadata)
+        {
+            if (string.IsNullOrWhiteSpace(fieldName))
+                throw new ArgumentException("Se requiere el nombre del campo.", "fieldName");
+            if (metadata == null)
+                throw new ArgumentNullException("metadata");
+            if (FieldMetadata == null)
+                FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>(StringComparer.OrdinalIgnoreCase);
+            metadata.Repair();
+            FieldMetadata[fieldName.Trim()] = metadata.Clone();
+            MetadataSchemaVersion = CurrentMetadataSchemaVersion;
+        }
+
+        private void EnsureFieldMetadata(string key, string original, string normalized, string sensitivity)
+        {
+            original = ValueOrEmpty(original);
+            normalized = ValueOrEmpty(normalized);
+            JobApplicationFieldMetadata metadata;
+            if (!FieldMetadata.TryGetValue(key, out metadata) || metadata == null)
+            {
+                if (original.Length == 0) return;
+                FieldMetadata[key] = new JobApplicationFieldMetadata
+                {
+                    NormalizedValue = normalized,
+                    Source = "legacy-profile",
+                    Confidence = 0.5,
+                    ApprovedAtUtc = string.Empty,
+                    Sensitivity = sensitivity,
+                    OriginalEvidence = original
+                };
+                return;
+            }
+
+            metadata.Repair();
+            if (metadata.Source != "legacy-profile" && metadata.Source != "unknown" &&
+                !string.Equals(metadata.NormalizedValue, normalized, StringComparison.Ordinal))
+            {
+                // A user edit invalidates a previous approval without deleting
+                // the profile value or the provenance record.
+                metadata.Source = "edited-profile";
+                metadata.Confidence = Math.Min(metadata.Confidence, 0.5);
+                metadata.ApprovedAtUtc = string.Empty;
+                metadata.OriginalEvidence = original;
+                metadata.NormalizedValue = normalized;
+            }
+            if (metadata.Source == "legacy-profile" || metadata.Source == "unknown")
+            {
+                metadata.NormalizedValue = normalized;
+                metadata.OriginalEvidence = original;
+                metadata.Source = "legacy-profile";
+            }
+            if (metadata.Sensitivity == "unknown") metadata.Sensitivity = sensitivity;
         }
 
         public void Normalize()
@@ -174,6 +365,16 @@ namespace ChatGPTLite
             copy.DesiredRole = DesiredRole;
             copy.WorkMode = WorkMode;
             copy.EmploymentType = EmploymentType;
+            copy.MetadataSchemaVersion = MetadataSchemaVersion;
+            copy.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>(StringComparer.OrdinalIgnoreCase);
+            if (FieldMetadata != null)
+            {
+                foreach (KeyValuePair<string, JobApplicationFieldMetadata> item in FieldMetadata)
+                {
+                    if (string.IsNullOrWhiteSpace(item.Key) || item.Value == null) continue;
+                    copy.FieldMetadata[item.Key] = item.Value.Clone();
+                }
+            }
             copy.Experiences = new List<JobExperience>();
             foreach (JobExperience experience in Experiences)
             {

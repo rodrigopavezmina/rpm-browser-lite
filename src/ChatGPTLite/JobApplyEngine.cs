@@ -67,6 +67,9 @@ namespace ChatGPTLite
             // handles the file attachment separately through DevTools Protocol.
             JobApplicationProfile pageProfile = profile.Clone();
             pageProfile.ResumePath = string.Empty;
+            // Field provenance can contain original CV text or other sensitive
+            // evidence; the page matcher only needs the legacy scalar values.
+            pageProfile.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>();
             string profileJson = serializer.Serialize(pageProfile);
             string profileJsonLiteral = serializer.Serialize(profileJson);
             string invocation =
