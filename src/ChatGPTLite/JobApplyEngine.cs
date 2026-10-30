@@ -192,7 +192,7 @@ namespace ChatGPTLite
             {
                 return ResumeAttachResult.FromTimeout(ex.Message);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return ResumeAttachResult.Failed(
                     "El portal rechazó la carga automática del CV. Adjunta el archivo manualmente.");
@@ -377,7 +377,7 @@ namespace ChatGPTLite
                 result.Review.AddRange(ReadLabels(values, "review"));
                 result.Skipped.AddRange(ReadLabels(values, "skipped"));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 result.Error = "No se pudo interpretar el resultado del portal. Revisa los campos manualmente.";
             }

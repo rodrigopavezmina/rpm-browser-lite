@@ -22,9 +22,19 @@
         if (!value || list.indexOf(value) >= 0) return;
         list.push(value);
     }
-    function byId(id) {
-        if (!id || !global.document || !document.getElementById) return null;
-        try { return document.getElementById(id); } catch (error) { return null; }
+    function ownerDocument(element) {
+        try {
+            if (element && element.ownerDocument) return element.ownerDocument;
+            if (global.document) return global.document;
+            return typeof document !== "undefined" ? document : null;
+        } catch (error) {
+            return global.document || (typeof document !== "undefined" ? document : null);
+        }
+    }
+    function byId(id, element) {
+        var owner = ownerDocument(element);
+        if (!id || !owner || !owner.getElementById) return null;
+        try { return owner.getElementById(id); } catch (error) { return null; }
     }
     function associatedLabels(element) {
         var labels = [], i, node, id;
@@ -33,13 +43,14 @@
         } catch (error) { }
         var labelledBy = attr(element, "aria-labelledby").split(/\s+/);
         for (i = 0; i < labelledBy.length; i++) {
-            node = byId(labelledBy[i]);
+            node = byId(labelledBy[i], element);
             if (node) addUnique(labels, nodeText(node));
         }
         id = attr(element, "id");
-        if (id && document.querySelectorAll) {
+        var owner = ownerDocument(element);
+        if (id && owner && owner.querySelectorAll) {
             try {
-                var explicit = document.querySelectorAll("label[for='" + id.replace(/'/g, "\\'") + "']");
+                var explicit = owner.querySelectorAll("label[for='" + id.replace(/'/g, "\\'") + "']");
                 for (i = 0; i < explicit.length; i++) addUnique(labels, nodeText(explicit[i]));
             } catch (error2) { }
         }
@@ -107,10 +118,10 @@
         try { if (element.validationMessage) addUnique(messages, element.validationMessage); } catch (error) { }
         if (attr(element, "aria-invalid") === "true") addUnique(messages, "aria-invalid");
         var errorId = attr(element, "aria-errormessage");
-        node = byId(errorId);
+        node = byId(errorId, element);
         if (node) addUnique(messages, nodeText(node));
         for (i = 0; i < ids.length; i++) {
-            node = byId(ids[i]);
+            node = byId(ids[i], element);
             if (node) addUnique(describedBy, nodeText(node));
         }
         var parent = element.parentElement;
@@ -134,9 +145,11 @@
                 option = element.options[i];
                 options.push({ label: clean(option.text || option.label), value: attr(option, "value") || text(option.value), disabled: !!option.disabled, selected: !!option.selected });
             }
-        } else if (String(element.type).toLowerCase() === "radio" && attr(element, "name") && document.querySelectorAll) {
+        } else if (String(element.type).toLowerCase() === "radio" && attr(element, "name")) {
             try {
-                var radios = document.querySelectorAll("input[type='radio'][name='" + attr(element, "name").replace(/'/g, "\\'") + "']");
+                var owner = ownerDocument(element);
+                if (!owner || !owner.querySelectorAll) return options;
+                var radios = owner.querySelectorAll("input[type='radio'][name='" + attr(element, "name").replace(/'/g, "\\'") + "']");
                 for (i = 0; i < radios.length; i++) {
                     option = radios[i];
                     var radioLabels = fieldLabels(option);
@@ -176,7 +189,7 @@
         } catch (error2) { }
     }
     function inspect() {
-        var nodes = [], fields = [], i;
+        var nodes = [], fields = [], identityCounts = {}, i;
         collectControls(document, nodes);
         for (i = 0; i < nodes.length; i++) {
             var element = nodes[i], labels = fieldLabels(element), context = sectionContext(element), type;
@@ -188,7 +201,10 @@
             else type = String(element.tagName).toLowerCase() === "input" ? (attr(element, "type").toLowerCase() || "text") : String(element.tagName).toLowerCase();
             var visibilityInfo = visibility(element), validationInfo = validation(element), options = optionList(element);
             var ordinal = i + 1;
-            var canonical = [ordinal, type, labels.label, labels.name, labels.id, labels.autocomplete, context.section, context.fieldset].join("|");
+            var identity = [type, labels.label, labels.name, labels.id, labels.autocomplete, context.section, context.fieldset].join("|");
+            var occurrence = identityCounts[identity] || 0;
+            identityCounts[identity] = occurrence + 1;
+            var canonical = identity + "|" + occurrence;
             fields.push({
                 fingerprint: "f-" + fnv1a(canonical),
                 ordinal: ordinal,

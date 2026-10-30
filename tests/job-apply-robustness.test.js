@@ -100,5 +100,8 @@ const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite',
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
 assert.match(browser, /initial-failed/);
 assert.match(browser, /manualmente si es necesario/);
+const program = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'Program.cs'), 'utf8');
+assert.match(program, /JobApplyDiagnostics\.Exception\(exception\)/);
+assert.doesNotMatch(program, /exception\.ToString\(\)/);
 
 console.log('job-apply-robustness: ok');

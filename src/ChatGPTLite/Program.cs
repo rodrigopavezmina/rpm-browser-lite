@@ -82,7 +82,7 @@ namespace ChatGPTLite
                 File.AppendAllText(
                     paths.LogFile,
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " Unhandled UI exception\r\n" +
-                    (exception == null ? string.Empty : exception.ToString()) + "\r\n\r\n",
+                    (exception == null ? string.Empty : JobApplyDiagnostics.Exception(exception)) + "\r\n\r\n",
                     Encoding.UTF8);
             }
             catch
