@@ -112,6 +112,9 @@ namespace ChatGPTLite
         private bool _jobApplyContinuationRunning;
         private string _jobApplySessionHost;
         private DateTime _jobApplySessionStartedUtc;
+        private int _jobApplyNavigationGeneration;
+        private readonly HashSet<string> _jobApplyPreparedPages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private TaskCompletionSource<bool> _jobApplyNavigationCompletion;
         private bool _startDashboardVisible;
         private bool _startAddressEditPrepared;
         private int _startDashboardSecondsRemaining;
@@ -1611,7 +1614,11 @@ namespace ChatGPTLite
             if (!_app.TryGetJobApplicationProfile(this, !continuation, out profile))
             {
                 if (continuation)
+                {
                     _jobApplySessionActive = false;
+                    _statusLabel.Text = "Perfil o CV no disponible; revisa Perfil de postulación.";
+                    _app.LogJobApply("profile-unavailable", Record.Url, "manual-profile-repair", null);
+                }
                 return;
             }
 
@@ -1623,27 +1630,52 @@ namespace ChatGPTLite
                 else
                     _jobApplyButton.Enabled = false;
                 _statusLabel.Text = continuation ? "Completando la página siguiente…" : "Analizando postulación…";
-                await EnsureBrowserReadyAsync(true);
+                await AwaitJobApplyOperationAsync(
+                    EnsureBrowserReadyAsync(true),
+                    TimeSpan.FromSeconds(35),
+                    "WebView2 no respondió a tiempo. La página quedó intacta.");
+                await AwaitJobApplyNavigationAsync(TimeSpan.FromSeconds(35));
                 if (CoreWebView2 == null)
                     throw new InvalidOperationException("El navegador todavía no está listo.");
+
+                int navigationGeneration = _jobApplyNavigationGeneration;
+                string operationHost = GetJobApplyHost(CoreWebView2.Source ?? Record.Url);
+                if (operationHost.Length == 0)
+                    throw new InvalidOperationException("La página actual no es un portal web seguro para preparar.");
+                _app.LogJobApply(
+                    continuation ? "continuation-start" : "initial-start",
+                    CoreWebView2.Source ?? Record.Url,
+                    "running",
+                    null);
 
                 JobApplyResult result = await JobApplyEngine.FillAsync(CoreWebView2, profile);
                 if (result.HasError)
                     throw new InvalidOperationException(result.Error);
+                EnsureJobApplyPageStable(navigationGeneration, operationHost);
 
                 if (result.ResumeFieldFound && !string.IsNullOrWhiteSpace(profile.ResumePath))
+                {
                     resumeResult = await JobApplyEngine.AttachResumeAsync(CoreWebView2, profile.ResumePath);
+                    EnsureJobApplyPageStable(navigationGeneration, operationHost);
+                }
 
                 if (!continuation)
                 {
                     _jobApplySessionHost = GetJobApplyHost(CoreWebView2.Source ?? Record.Url);
                     _jobApplySessionActive = !string.IsNullOrWhiteSpace(_jobApplySessionHost);
                     _jobApplySessionStartedUtc = DateTime.UtcNow;
+                    _jobApplyPreparedPages.Clear();
                 }
+                _jobApplyPreparedPages.Add(GetJobApplyPageKey(CoreWebView2.Source ?? Record.Url));
                 _statusLabel.Text = result.FilledCount.ToString() + " campos listos · " +
                     result.ReviewCount.ToString() + " por revisar";
                 if (!continuation)
                     ShowJobApplySummary(result, resumeResult, profile);
+                _app.LogJobApply(
+                    continuation ? "continuation-success" : "initial-success",
+                    CoreWebView2.Source ?? Record.Url,
+                    "filled=" + result.FilledCount.ToString() + ",review=" + result.ReviewCount.ToString(),
+                    null);
             }
             catch (Exception ex)
             {
@@ -1672,6 +1704,48 @@ namespace ChatGPTLite
             }
         }
 
+        private async Task AwaitJobApplyOperationAsync(Task operation, TimeSpan timeout, string message)
+        {
+            if (operation == null)
+                throw new InvalidOperationException(message);
+            Task completed = await Task.WhenAny(operation, Task.Delay(timeout));
+            if (completed != operation)
+                throw new JobApplyTimeoutException(message);
+            await operation;
+        }
+
+        private async Task AwaitJobApplyNavigationAsync(TimeSpan timeout)
+        {
+            TaskCompletionSource<bool> completion = _jobApplyNavigationCompletion;
+            if (completion == null)
+                return;
+            await AwaitJobApplyOperationAsync(
+                completion.Task,
+                timeout,
+                "El portal no terminó de navegar a tiempo. La página quedó intacta.");
+            if (!completion.Task.Result)
+                throw new InvalidOperationException("La navegación del portal falló; reintenta manualmente.");
+        }
+
+        private void EnsureJobApplyPageStable(int navigationGeneration, string expectedHost)
+        {
+            if (IsDisposed || Disposing || CoreWebView2 == null)
+                throw new InvalidOperationException("La ventana web dejó de estar disponible; no se modificó el formulario.");
+            string currentHost = GetJobApplyHost(CoreWebView2.Source ?? Record.Url);
+            if (navigationGeneration != _jobApplyNavigationGeneration ||
+                !string.Equals(currentHost, expectedHost, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("La página cambió durante el análisis; no se adjuntó ni envió nada.");
+        }
+
+        private static string GetJobApplyPageKey(string url)
+        {
+            Uri uri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return string.Empty;
+            return uri.AbsoluteUri;
+        }
+
         private static string GetJobApplyHost(string url)
         {
             Uri uri;
@@ -1694,10 +1768,20 @@ namespace ChatGPTLite
             }
 
             if (resumeResult != null)
-                summary.AppendLine(resumeResult.Success ? resumeResult.Message : "CV pendiente: " + resumeResult.Message);
+            {
+                summary.AppendLine(
+                    resumeResult.Success
+                        ? resumeResult.Message
+                        : (resumeResult.TimedOut
+                            ? "CV pendiente: el portal no respondió a tiempo; adjúntalo manualmente."
+                            : "CV pendiente: " + resumeResult.Message));
+            }
             else if (result.ResumeFieldFound && string.IsNullOrWhiteSpace(profile.ResumePath))
                 summary.AppendLine("CV pendiente: configura el archivo en tu perfil.");
 
+            summary.AppendLine();
+            summary.AppendLine("Si faltan campos, el portal usa un widget no accesible, un iframe o un componente personalizado.");
+            summary.AppendLine("Completa esos campos manualmente, verifica fechas y adjuntos, y pulsa Enviar solo tú.");
             AppendJobApplyLabels(summary, "Revisa especialmente", result.Review);
             summary.AppendLine();
             summary.AppendLine("Los campos amarillos necesitan revisión. La aplicación nunca pulsa Enviar por ti.");
@@ -1747,6 +1831,11 @@ namespace ChatGPTLite
 
                 await browser.EnsureCoreWebView2Async(environment);
                 ResizeBrowserToHost();
+                _app.LogJobApply(
+                    "webview-ready",
+                    Record.Url,
+                    "engine=" + JobApplyDiagnostics.Label(browser.CoreWebView2.Environment.BrowserVersionString),
+                    null);
                 await ConfigureBrowserAsync(browser.CoreWebView2);
                 await _app.InstallConfiguredExtensionsAsync(browser.CoreWebView2.Profile);
 
@@ -1865,6 +1954,8 @@ namespace ChatGPTLite
 
             core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs args)
             {
+                _jobApplyNavigationGeneration++;
+                _jobApplyNavigationCompletion = new TaskCompletionSource<bool>();
                 MarkUserActivity();
                 if (_jobApplySessionActive &&
                     ((DateTime.UtcNow - _jobApplySessionStartedUtc).TotalMinutes > 45 ||
@@ -1886,9 +1977,16 @@ namespace ChatGPTLite
             };
             core.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs args)
             {
+                if (_jobApplyNavigationCompletion != null)
+                    _jobApplyNavigationCompletion.TrySetResult(args.IsSuccess);
                 UpdateNavigationButtons();
                 if (!args.IsSuccess)
+                {
+                    _jobApplySessionActive = false;
+                    _jobApplyPreparedPages.Clear();
+                    _app.LogJobApply("navigation-failed", core.Source, "manual-retry", null);
                     _statusLabel.Text = "Could not load · click ↻ to retry";
+                }
                 else
                 {
                     ApplyBrowserPageSurface();
@@ -1903,7 +2001,11 @@ namespace ChatGPTLite
                     RefreshAddressSuggestions();
                 if (args.IsSuccess && _jobApplySessionActive &&
                     string.Equals(GetJobApplyHost(core.Source), _jobApplySessionHost, StringComparison.OrdinalIgnoreCase))
-                    await PrepareJobApplicationAsync(true);
+                {
+                    string pageKey = GetJobApplyPageKey(core.Source);
+                    if (!_jobApplyPreparedPages.Contains(pageKey))
+                        await PrepareJobApplicationAsync(true);
+                }
             };
             core.SourceChanged += delegate
             {
@@ -1930,6 +2032,9 @@ namespace ChatGPTLite
             core.NewWindowRequested += NewWindowRequested;
             core.ProcessFailed += delegate(object sender, CoreWebView2ProcessFailedEventArgs args)
             {
+                _jobApplySessionActive = false;
+                _jobApplyPreparedPages.Clear();
+                _app.LogJobApply("webview-process-failed", core.Source, "manual-retry", null);
                 _statusLabel.Text = "Web view stopped · restoring";
                 BeginInvoke((MethodInvoker)delegate
                 {

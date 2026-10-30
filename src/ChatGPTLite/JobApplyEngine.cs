@@ -19,6 +19,8 @@ namespace ChatGPTLite
     internal static class JobApplyEngine
     {
         private const string ScriptResourceName = "ChatGPTLite.JobApplyScript.js";
+        private static readonly TimeSpan FillTimeout = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan AttachTimeout = TimeSpan.FromSeconds(20);
         private static readonly object ScriptLock = new object();
         private static string _script;
 
@@ -39,18 +41,33 @@ namespace ChatGPTLite
 
         public static async Task<JobApplyResult> FillAsync(CoreWebView2 browser, JobApplicationProfile profile)
         {
+            return await FillAsync(browser, profile, FillTimeout);
+        }
+
+        public static async Task<JobApplyResult> FillAsync(
+            CoreWebView2 browser,
+            JobApplicationProfile profile,
+            TimeSpan timeout)
+        {
             if (browser == null)
                 throw new ArgumentNullException("browser");
             if (profile == null)
                 throw new ArgumentNullException("profile");
+            if (timeout <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException("timeout");
 
             // AddScriptToExecuteOnDocumentCreatedAsync installs the engine for new
             // pages. Executing it here as well supports the page that was already
             // open when a user updated the application.
-            await browser.ExecuteScriptAsync(Script);
+            DateTime deadline = DateTime.UtcNow.Add(timeout);
+            await AwaitWithDeadline(browser.ExecuteScriptAsync(Script), deadline, "El portal tardó demasiado en preparar el motor.");
 
             JavaScriptSerializer serializer = CreateSerializer();
-            string profileJson = serializer.Serialize(profile);
+            // Never expose the local CV path to page JavaScript. The native host
+            // handles the file attachment separately through DevTools Protocol.
+            JobApplicationProfile pageProfile = profile.Clone();
+            pageProfile.ResumePath = string.Empty;
+            string profileJson = serializer.Serialize(pageProfile);
             string profileJsonLiteral = serializer.Serialize(profileJson);
             string invocation =
                 "(function(){try{" +
@@ -58,7 +75,10 @@ namespace ChatGPTLite
                 "return {error:'El motor de postulación no está disponible en esta página.'};" +
                 "return window.RpmJobApply.fill(JSON.parse(" + profileJsonLiteral + "));" +
                 "}catch(error){return {error:String(error&&error.message?error.message:error)};}})()";
-            string rawResult = await browser.ExecuteScriptAsync(invocation);
+            string rawResult = await AwaitWithDeadline(
+                browser.ExecuteScriptAsync(invocation),
+                deadline,
+                "El portal tardó demasiado en responder al autollenado.");
             return JobApplyResult.Parse(rawResult, serializer);
         }
 
@@ -93,14 +113,16 @@ namespace ChatGPTLite
                 return ResumeAttachResult.Failed("El CV debe ser PDF, DOC, DOCX, RTF o TXT.");
 
             JavaScriptSerializer serializer = CreateSerializer();
+            DateTime deadline = DateTime.UtcNow.Add(AttachTimeout);
             string searchId = null;
             try
             {
                 Dictionary<string, object> searchParameters = new Dictionary<string, object>();
                 searchParameters["query"] = "input[data-rpm-job-file=\"resume\"]";
                 searchParameters["includeUserAgentShadowDOM"] = true;
-                string searchRaw = await browser.CallDevToolsProtocolMethodAsync(
-                    "DOM.performSearch", serializer.Serialize(searchParameters));
+                string searchRaw = await CallDevToolsAsync(
+                    browser, "DOM.performSearch", serializer.Serialize(searchParameters), deadline,
+                    "El portal tardó demasiado en buscar el campo de CV.");
                 Dictionary<string, object> search = ParseDictionary(searchRaw, serializer);
                 searchId = GetString(search, "searchId");
                 int resultCount = GetInt(search, "resultCount");
@@ -111,8 +133,9 @@ namespace ChatGPTLite
                 resultParameters["searchId"] = searchId;
                 resultParameters["fromIndex"] = 0;
                 resultParameters["toIndex"] = 1;
-                string resultsRaw = await browser.CallDevToolsProtocolMethodAsync(
-                    "DOM.getSearchResults", serializer.Serialize(resultParameters));
+                string resultsRaw = await CallDevToolsAsync(
+                    browser, "DOM.getSearchResults", serializer.Serialize(resultParameters), deadline,
+                    "El portal tardó demasiado en identificar el campo de CV.");
                 Dictionary<string, object> results = ParseDictionary(resultsRaw, serializer);
                 int nodeId = GetFirstInt(results, "nodeIds");
                 if (nodeId <= 0)
@@ -121,15 +144,17 @@ namespace ChatGPTLite
                 Dictionary<string, object> fileParameters = new Dictionary<string, object>();
                 fileParameters["nodeId"] = nodeId;
                 fileParameters["files"] = new string[] { fullPath };
-                await browser.CallDevToolsProtocolMethodAsync(
-                    "DOM.setFileInputFiles", serializer.Serialize(fileParameters));
+                await CallDevToolsAsync(
+                    browser, "DOM.setFileInputFiles", serializer.Serialize(fileParameters), deadline,
+                    "El portal tardó demasiado en adjuntar el CV.");
 
                 // Dispatch the same events generated by a normal file selection so
                 // React/Angular/Vue validation observes the attachment.
                 Dictionary<string, object> resolveParameters = new Dictionary<string, object>();
                 resolveParameters["nodeId"] = nodeId;
-                string resolvedRaw = await browser.CallDevToolsProtocolMethodAsync(
-                    "DOM.resolveNode", serializer.Serialize(resolveParameters));
+                string resolvedRaw = await CallDevToolsAsync(
+                    browser, "DOM.resolveNode", serializer.Serialize(resolveParameters), deadline,
+                    "El portal tardó demasiado en validar el CV.");
                 Dictionary<string, object> resolved = ParseDictionary(resolvedRaw, serializer);
                 Dictionary<string, object> remoteObject = GetDictionary(resolved, "object");
                 string objectId = GetString(remoteObject, "objectId");
@@ -142,15 +167,21 @@ namespace ChatGPTLite
                         "this.dispatchEvent(new Event('change',{bubbles:true}));" +
                         "return this.files?this.files.length:0;}";
                     callParameters["returnByValue"] = true;
-                    await browser.CallDevToolsProtocolMethodAsync(
-                        "Runtime.callFunctionOn", serializer.Serialize(callParameters));
+                    await CallDevToolsAsync(
+                        browser, "Runtime.callFunctionOn", serializer.Serialize(callParameters), deadline,
+                        "El portal tardó demasiado en confirmar el CV.");
                 }
 
                 return ResumeAttachResult.Attached(Path.GetFileName(fullPath));
             }
+            catch (JobApplyTimeoutException ex)
+            {
+                return ResumeAttachResult.FromTimeout(ex.Message);
+            }
             catch (Exception ex)
             {
-                return ResumeAttachResult.Failed("El portal rechazó la carga automática del CV: " + ex.Message);
+                return ResumeAttachResult.Failed(
+                    "El portal rechazó la carga automática del CV. Adjunta el archivo manualmente.");
             }
             finally
             {
@@ -160,8 +191,9 @@ namespace ChatGPTLite
                     {
                         Dictionary<string, object> discardParameters = new Dictionary<string, object>();
                         discardParameters["searchId"] = searchId;
-                        browser.CallDevToolsProtocolMethodAsync(
-                            "DOM.discardSearchResults", serializer.Serialize(discardParameters))
+                        CallDevToolsAsync(
+                            browser, "DOM.discardSearchResults", serializer.Serialize(discardParameters),
+                            DateTime.UtcNow.AddSeconds(2), string.Empty)
                             .GetAwaiter().GetResult();
                     }
                     catch
@@ -189,6 +221,31 @@ namespace ChatGPTLite
             serializer.MaxJsonLength = 16 * 1024 * 1024;
             serializer.RecursionLimit = 100;
             return serializer;
+        }
+
+        private static async Task<string> CallDevToolsAsync(
+            CoreWebView2 browser,
+            string method,
+            string parameters,
+            DateTime deadline,
+            string timeoutMessage)
+        {
+            return await AwaitWithDeadline(
+                browser.CallDevToolsProtocolMethodAsync(method, parameters),
+                deadline,
+                timeoutMessage);
+        }
+
+        private static async Task<T> AwaitWithDeadline<T>(Task<T> task, DateTime deadline, string message)
+        {
+            TimeSpan remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new JobApplyTimeoutException(message);
+
+            Task completed = await Task.WhenAny(task, Task.Delay(remaining));
+            if (completed != task)
+                throw new JobApplyTimeoutException(message);
+            return await task;
         }
 
         private static Dictionary<string, object> ParseDictionary(string raw, JavaScriptSerializer serializer)
@@ -253,6 +310,14 @@ namespace ChatGPTLite
         }
     }
 
+    internal sealed class JobApplyTimeoutException : TimeoutException
+    {
+        public JobApplyTimeoutException(string message)
+            : base(message)
+        {
+        }
+    }
+
     internal sealed class JobApplyResult
     {
         public List<string> Filled { get; private set; }
@@ -289,7 +354,10 @@ namespace ChatGPTLite
                     result.Error = "El portal no devolvió un resultado de autollenado válido.";
                     return result;
                 }
-                result.Error = ReadString(values, "error");
+                string portalError = ReadString(values, "error");
+                result.Error = string.IsNullOrWhiteSpace(portalError)
+                    ? string.Empty
+                    : "El portal no pudo preparar algunos campos. Revisa el formulario manualmente.";
                 result.ResumeFieldFound = ReadBoolean(values, "resumeFieldFound");
                 result.Filled.AddRange(ReadLabels(values, "filled"));
                 result.Review.AddRange(ReadLabels(values, "review"));
@@ -297,7 +365,7 @@ namespace ChatGPTLite
             }
             catch (Exception ex)
             {
-                result.Error = "No se pudo interpretar el resultado del portal: " + ex.Message;
+                result.Error = "No se pudo interpretar el resultado del portal. Revisa los campos manualmente.";
             }
             return result;
         }
@@ -348,22 +416,34 @@ namespace ChatGPTLite
     internal sealed class ResumeAttachResult
     {
         public bool Success { get; private set; }
+        public bool TimedOut { get; private set; }
         public string Message { get; private set; }
 
-        private ResumeAttachResult(bool success, string message)
+        private ResumeAttachResult(bool success, bool timedOut, string message)
         {
             Success = success;
+            TimedOut = timedOut;
             Message = message ?? string.Empty;
         }
 
         public static ResumeAttachResult Attached(string fileName)
         {
-            return new ResumeAttachResult(true, "CV adjuntado: " + fileName);
+            return new ResumeAttachResult(true, false, "CV adjuntado: " + fileName);
+        }
+
+        public static ResumeAttachResult TimedOutResult(string message)
+        {
+            return new ResumeAttachResult(false, true, message);
         }
 
         public static ResumeAttachResult Failed(string message)
         {
-            return new ResumeAttachResult(false, message);
+            return new ResumeAttachResult(false, false, message);
+        }
+
+        public static ResumeAttachResult FromTimeout(string message)
+        {
+            return TimedOutResult(message);
         }
     }
 }

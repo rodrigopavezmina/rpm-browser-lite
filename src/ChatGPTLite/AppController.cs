@@ -1670,13 +1670,24 @@ namespace ChatGPTLite
                 }
                 File.AppendAllText(
                     _paths.LogFile,
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + "\r\n" +
-                    (ex == null ? string.Empty : ex.ToString()) + "\r\n\r\n",
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + JobApplyDiagnostics.Message(message) + "\r\n" +
+                    (ex == null ? string.Empty : JobApplyDiagnostics.Exception(ex)) + "\r\n\r\n",
                     Encoding.UTF8);
             }
             catch
             {
             }
+        }
+
+        public void LogJobApply(string eventName, string pageUrl, string state, Exception exception)
+        {
+            string record = "JobApply event=" + JobApplyDiagnostics.Label(eventName) +
+                " host=" + JobApplyDiagnostics.Host(pageUrl) +
+                " state=" + JobApplyDiagnostics.Label(state);
+            string error = JobApplyDiagnostics.Exception(exception);
+            if (error.Length > 0)
+                record += " error=" + error;
+            Log(record, null);
         }
 
         protected override void Dispose(bool disposing)

@@ -79,6 +79,7 @@ $sources = @(
     (Join-Path $sourceRoot 'JobApplyModels.cs'),
     (Join-Path $sourceRoot 'JobApplyStore.cs'),
     (Join-Path $sourceRoot 'JobApplyEngine.cs'),
+    (Join-Path $sourceRoot 'JobApplyDiagnostics.cs'),
     (Join-Path $sourceRoot 'JobProfileForm.cs'),
     (Join-Path $sourceRoot 'UiTheme.cs'),
     (Join-Path $sourceRoot 'WindowCustomizationForm.cs'),

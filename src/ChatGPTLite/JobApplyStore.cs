@@ -30,6 +30,7 @@ namespace ChatGPTLite
 
     internal static class JobApplyStore
     {
+        private const int MaxProfileBytes = 4 * 1024 * 1024;
         private static readonly object Sync = new object();
         private static readonly byte[] Entropy = Encoding.UTF8.GetBytes(
             "ChatGPTLite.JobApplicationProfile.v1");
@@ -43,6 +44,17 @@ namespace ChatGPTLite
             {
                 if (!File.Exists(fullPath))
                     return null;
+
+                FileInfo fileInfo = new FileInfo(fullPath);
+                if (fileInfo.Length > MaxProfileBytes)
+                {
+                    throw new JobApplyStoreException(
+                        "El perfil cifrado supera el tamaño seguro permitido y se conservará sin abrirlo.",
+                        fullPath,
+                        null,
+                        new InvalidDataException("Profile size limit exceeded."),
+                        null);
+                }
 
                 byte[] encrypted = File.ReadAllBytes(fullPath);
                 try
@@ -100,6 +112,8 @@ namespace ChatGPTLite
                 JavaScriptSerializer serializer = CreateSerializer();
                 string json = serializer.Serialize(profile);
                 byte[] clearBytes = StrictUtf8.GetBytes(json);
+                if (clearBytes.Length > MaxProfileBytes)
+                    throw new InvalidDataException("El perfil supera el tamaño seguro permitido.");
                 byte[] encrypted = ProtectedData.Protect(
                     clearBytes,
                     Entropy,

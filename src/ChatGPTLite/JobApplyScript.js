@@ -1,14 +1,18 @@
 (function (global) {
     "use strict";
-    if (global.RpmJobApply && global.RpmJobApply.version) return;
+    if (global.RpmJobApply && global.RpmJobApply.__rpmJobApplyOwned) return;
 
     var VERSION = "1.0.0";
-    var state = { profile: null, observer: null, filling: false, timer: null };
+    var MAX_DYNAMIC_RETRIES = 12;
+    var state = { profile: null, observer: null, filling: false, timer: null, retryCount: 0 };
     var protectedWords = [
         "password", "captcha", "recaptcha", "security code", "social security", "ssn",
         "date of birth", "birth date", "fecha de nacimiento", "ethnicity", "race", "gender",
         "disability", "veteran", "demographic", "diversity", "pronoun", "consent", "privacy",
-        "terms", "agreement", "signature", "firma", "autorizo", "authorize", "acknowledge"
+        "terms", "agreement", "signature", "firma", "autorizo", "authorize", "acknowledge",
+        "sexual orientation", "nationality", "criminal record", "background check",
+        "senha", "security code", "date of birth", "data de nascimento",
+        "sexualidade", "nacionalidade", "registro criminal", "verificação de antecedentes"
     ];
 
     function text(value) { return value == null ? "" : String(value); }
@@ -74,7 +78,8 @@
             firstName: "FirstName", lastName: "LastName", preferredName: "PreferredName", email: "Email", phone: "Phone",
             address: "AddressLine1", address2: "AddressLine2", city: "City", region: "Region", postal: "PostalCode", country: "Country",
             linkedin: "LinkedInUrl", portfolio: "PortfolioUrl", github: "GitHubUrl", years: "YearsExperience", authorization: "WorkAuthorization",
-            sponsorship: "RequiresSponsorship", relocation: "WillingToRelocate", salary: "SalaryExpectation", skills: "Skills"
+            sponsorship: "RequiresSponsorship", relocation: "WillingToRelocate", salary: "SalaryExpectation", skills: "Skills",
+            workMode: "WorkMode", employmentType: "EmploymentType"
         };
         return map[key] ? get(profile, map[key]) : "";
     }
@@ -108,7 +113,9 @@
         { key: "sponsorship", terms: ["sponsorship", "visa sponsorship", "visa", "patrocinio"], review: true },
         { key: "relocation", terms: ["relocate", "relocation", "move", "reubicacion", "reubicación"], review: true },
         { key: "salary", terms: ["salary", "compensation", "pay expectation", "pretension de renta", "pretensión de renta", "remuneracion", "remuneración"], review: true },
-        { key: "skills", terms: ["skills", "technical skills", "habilidades", "competencias"] }
+        { key: "skills", terms: ["skills", "technical skills", "habilidades", "competencias"] },
+        { key: "workMode", terms: ["work mode", "work arrangement", "remote", "hybrid", "onsite", "modalidad", "remoto", "hibrido", "presencial", "modelo de trabalho"] },
+        { key: "employmentType", terms: ["employment type", "job type", "contract type", "tipo de empleo", "tipo de contrato", "full time", "part time", "tempo integral", "tempo parcial"] }
     ];
 
     function score(definition, label, element) {
@@ -163,7 +170,9 @@
             var setter = Object.getOwnPropertyDescriptor(prototype, "value");
             if (setter && setter.set) setter.set.call(element, stringValue); else element.value = stringValue;
         }
-        ["input", "change", "blur"].forEach(function (name) { element.dispatchEvent(new Event(name, { bubbles: true })); });
+        ["input", "change", "blur"].forEach(function (name) {
+            try { element.dispatchEvent(new Event(name, { bubbles: true })); } catch (error) { }
+        });
         return text(element.value) === stringValue || element.tagName.toLowerCase() === "select";
     }
     function formatValue(element, key, value, label) {
@@ -197,17 +206,24 @@
     }
     function fill(profile, options) {
         options = options || {};
-        state.profile = profile || state.profile;
-        profile = state.profile || {};
+        if (!profile) return { filled: [], review: [], skipped: [], resumeFieldFound: false, error: "Se requiere una sesión de llenado explícita." };
+        state.profile = profile;
         if (state.filling) return { filled: [], review: [], skipped: [], resumeFieldFound: false, busy: true };
         state.filling = true;
         var output = { filled: [], review: [], skipped: [], resumeFieldFound: false };
         try {
             var controls = document.querySelectorAll("input, select, textarea");
+            if (!controls || controls.length === 0) {
+                installObserver();
+                scheduleDynamicRetry();
+                return output;
+            }
+            state.retryCount = 0;
             for (var i = 0; i < controls.length; i++) {
                 var element = controls[i], type = normalize(element.type || element.tagName);
                 var label = controlText(element);
                 if (element.type === "file") {
+                    if (!visible(element)) continue;
                     if (hasAny(label, ["resume", "cv", "curriculum", "curriculo", "currículum"])) { element.setAttribute("data-rpm-job-file", "resume"); output.resumeFieldFound = true; }
                     continue;
                 }
@@ -239,8 +255,11 @@
                 if (!value) continue;
                 if (text(element.value).trim() && !get(profile, "OverwriteExisting")) { output.skipped.push({ label: label || match.definition.key, field: match.definition.key, reason: "existing" }); continue; }
                 var review = !!match.definition.review || match.confidence < 0.88;
+                if (element.dataset && element.dataset.rpmJobApplyValue === text(value) &&
+                    text(element.value) === text(value)) continue;
                 if (setValue(element, value)) {
                     highlight(element, review);
+                    if (element.dataset) element.dataset.rpmJobApplyValue = text(value);
                     (review ? output.review : output.filled).push({ label: label || match.definition.key, field: match.definition.key, confidence: Math.round(match.confidence * 100) / 100 });
                 } else output.review.push({ label: label || match.definition.key, field: match.definition.key, reason: "verification" });
             }
@@ -249,12 +268,35 @@
         } finally { state.filling = false; }
     }
     function installObserver() {
-        if (state.observer || !global.MutationObserver || !document.body) return;
+        if (!global.MutationObserver && !document.body) return;
+        if (state.observer || !global.MutationObserver || !document.body) {
+            if (!document.body) scheduleDynamicRetry();
+            return;
+        }
         state.observer = new MutationObserver(function () {
             if (state.timer) global.clearTimeout(state.timer);
             state.timer = global.setTimeout(function () { if (state.profile && !state.filling) fill(state.profile, { silent: true }); }, 350);
         });
         state.observer.observe(document.body, { childList: true, subtree: true });
     }
-    global.RpmJobApply = { version: VERSION, fill: fill, normalize: normalize };
+    function scheduleDynamicRetry() {
+        if (!global.MutationObserver && !document.body) return;
+        if (state.timer || !state.profile || state.retryCount >= MAX_DYNAMIC_RETRIES) return;
+        state.retryCount++;
+        state.timer = global.setTimeout(function () {
+            state.timer = null;
+            if (state.profile && !state.filling) fill(state.profile, { silent: true, retry: true });
+        }, 500);
+    }
+    var api = { version: VERSION, __rpmJobApplyOwned: true, fill: fill, normalize: normalize };
+    try {
+        Object.defineProperty(global, "RpmJobApply", {
+            value: Object.freeze ? Object.freeze(api) : api,
+            configurable: false,
+            enumerable: false,
+            writable: false
+        });
+    } catch (error) {
+        global.RpmJobApply = api;
+    }
 })(window);

@@ -241,12 +241,17 @@ namespace ChatGPTLite
             string[] formats =
             {
                 "yyyy-MM", "yyyy/MM", "MM/yyyy", "M/yyyy", "MM-yyyy", "M-yyyy",
-                "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy"
+                "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy", "yyyy.MM", "MM.yyyy",
+                "yyyyMMdd", "MMM yyyy", "MMMM yyyy"
             };
             if (DateTime.TryParseExact(text, formats, CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("es-CL"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("pt-BR"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             return text;
         }
@@ -294,12 +299,16 @@ namespace ChatGPTLite
             string[] formats =
             {
                 "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy", "yyyy/MM/dd",
-                "d-M-yyyy", "d/M/yyyy"
+                "d-M-yyyy", "d/M/yyyy", "yyyy.MM.dd", "dd.MM.yyyy", "yyyyMMdd"
             };
             if (DateTime.TryParseExact(text, formats, CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("es-CL"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("pt-BR"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             return text;
         }
