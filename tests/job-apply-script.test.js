@@ -14,11 +14,14 @@ const context = {
 };
 vm.runInNewContext(source, context, { filename: 'JobApplyScript.js' });
 
-assert.strictEqual(window.RpmJobApply.version, '1.0.0');
+assert.strictEqual(window.RpmJobApply.version, '2.0.0');
+assert.strictEqual(window.RpmJobApply.ontologyVersion, '2.0');
+const ontologyCategories = new Set(window.RpmJobApply.getOntology().map(item => item.category));
+['identity', 'contact', 'address', 'links', 'experience', 'education', 'authorization', 'availability', 'salary', 'skills', 'files', 'questions', 'sensitive'].forEach(category => assert.ok(ontologyCategories.has(category), category));
 assert.strictEqual(window.RpmJobApply.normalize('  Región / Chile  '), 'region chile');
 assert.strictEqual(window.RpmJobApply.normalize('Correo electrónico'), 'correo electronico');
 assert.deepStrictEqual(JSON.parse(JSON.stringify(window.RpmJobApply.fill({ FirstName: 'Ana' }))), {
-  filled: [], review: [], skipped: [], resumeFieldFound: false
+  filled: [], review: [], skipped: [], matches: [], resumeFieldFound: false
 });
 
 function FakeInput(type, attrs) {
@@ -46,4 +49,12 @@ const filled = window.RpmJobApply.fill({ FirstName: 'Ana', Email: 'ana@example.c
 assert.strictEqual(email.value, 'ana@example.com');
 assert.strictEqual(first.value, 'Ana');
 assert.strictEqual(filled.filled.length, 2);
+const ambiguousWebsite = new FakeInput('text', { name: 'website' });
+context.document.querySelectorAll = () => [ambiguousWebsite];
+const ambiguous = window.RpmJobApply.fill({ PortfolioUrl: 'https://portfolio.example' });
+assert.strictEqual(ambiguousWebsite.value, '');
+assert.ok(ambiguous.skipped.some(item => item.reason === 'ambiguous-near-tie'));
+assert.ok(ambiguous.matches.some(item =>
+  (item.canonicalField === 'links.website' || item.canonicalField === 'links.portfolio') &&
+  item.conflicts.some(conflict => conflict.canonicalField === 'links.website' || conflict.canonicalField === 'links.portfolio')));
 console.log('job-apply-script: ok');

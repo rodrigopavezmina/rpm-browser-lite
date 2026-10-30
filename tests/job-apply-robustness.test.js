@@ -79,7 +79,8 @@ const first = window.RpmJobApply.fill(profile);
 assert.strictEqual(firstName.value, 'Ana');
 assert.strictEqual(mode.value, 'remote');
 assert.strictEqual(first.resumeFieldFound, false);
-assert.ok(first.skipped.some(item => item.reason === 'manual confirmation'));
+assert.ok(first.skipped.some(item => item.canonicalField === 'sensitive.ethnicity' && item.reason === 'sensitive-manual-confirmation'));
+assert.ok(first.matches.every(item => item.canonicalField && typeof item.score === 'number' && Array.isArray(item.signals) && Array.isArray(item.conflicts) && item.reason));
 assert.strictEqual(first.filled.length, 2);
 
 const second = window.RpmJobApply.fill(profile);
@@ -95,6 +96,8 @@ assert.match(engine, /pageProfile\.ResumePath = string\.Empty/);
 assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>\(\)/);
 assert.match(engine, /JobApplyTimeoutException/);
 assert.match(engine, /fileCount/);
+assert.match(engine, /List<JobApplyMatch> Matches/);
+assert.match(engine, /CanonicalField/);
 
 const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);

@@ -2,7 +2,7 @@
     "use strict";
     if (global.RpmJobApply && global.RpmJobApply.__rpmJobApplyOwned) return;
 
-    var VERSION = "1.0.0";
+    var VERSION = "2.0.0";
     var MAX_DYNAMIC_RETRIES = 12;
     var state = { profile: null, observer: null, filling: false, timer: null, retryCount: 0 };
     var protectedWords = [
@@ -61,30 +61,31 @@
         if (match) return kind === "month" ? match[1] + "-" + match[2] : (match[3] ? source : match[1] + "-" + match[2] + "-01");
         return source;
     }
-    function profileValue(profile, key, index) {
+    function profileValue(profile, key, index, kind) {
         if (key === "fullName") return joinName(profile);
         var experiences = get(profile, "Experiences") || [];
         var education = get(profile, "Education") || [];
-        var item = index == null ? null : (experiences[index] || education[index]);
+        var item = index == null ? null : (kind === "education" ? education[index] : experiences[index]);
         if (key === "company") return item ? firstNonEmpty([get(item, "Company")]) : "";
         if (key === "jobTitle") return item ? firstNonEmpty([get(item, "Title")]) : firstNonEmpty([get(profile, "CurrentTitle"), get(profile, "DesiredRole")]);
         if (key === "location") return item ? get(item, "Location") : "";
         if (key === "startDate") return item ? get(item, "StartDate") : get(profile, "AvailableStartDate");
         if (key === "endDate") return item ? (get(item, "IsCurrent") ? "Present" : get(item, "EndDate")) : "";
         if (key === "description") return item ? get(item, "Description") : "";
+        if (key === "institution") return item ? get(item, "Institution") : "";
         if (key === "degree") return item ? get(item, "Degree") : "";
         if (key === "fieldOfStudy") return item ? get(item, "FieldOfStudy") : "";
         var map = {
-            firstName: "FirstName", lastName: "LastName", preferredName: "PreferredName", email: "Email", phone: "Phone",
+            firstName: "FirstName", middleName: "MiddleName", lastName: "LastName", preferredName: "PreferredName", email: "Email", phone: "Phone",
             address: "AddressLine1", address2: "AddressLine2", city: "City", region: "Region", postal: "PostalCode", country: "Country",
-            linkedin: "LinkedInUrl", portfolio: "PortfolioUrl", github: "GitHubUrl", years: "YearsExperience", authorization: "WorkAuthorization",
+            linkedin: "LinkedInUrl", portfolio: "PortfolioUrl", website: "PortfolioUrl", github: "GitHubUrl", years: "YearsExperience", authorization: "WorkAuthorization",
             sponsorship: "RequiresSponsorship", relocation: "WillingToRelocate", salary: "SalaryExpectation", skills: "Skills",
-            workMode: "WorkMode", employmentType: "EmploymentType"
+            workMode: "WorkMode", employmentType: "EmploymentType", availableStartDate: "AvailableStartDate"
         };
         return map[key] ? get(profile, map[key]) : "";
     }
 
-    var definitions = [
+    var definitions; /* legacy matcher table retained only as historical source:
         { key: "email", terms: ["email", "e mail", "correo", "correo electronico"], type: "email" },
         { key: "phone", terms: ["phone", "telephone", "mobile", "cell", "telefono", "celular"], type: "tel" },
         { key: "firstName", terms: ["first name", "given name", "forename", "nombre"], auto: ["given-name"] },
@@ -146,6 +147,139 @@
         if (element.type === "tel") best = definitions[1], bestScore = Math.max(bestScore, 0.96);
         return best ? { definition: best, confidence: bestScore } : null;
     }
+    */
+    function ontologyDefinition(canonicalField, key, category, terms, options) {
+        options = options || {};
+        return {
+            canonicalField: canonicalField, key: key, category: category, terms: terms || [],
+            auto: options.auto || [], inputType: options.inputType || "", context: options.context || "",
+            contextTerms: options.contextTerms || [], negativeTerms: options.negativeTerms || [],
+            review: !!options.review, sensitive: !!options.sensitive, file: !!options.file,
+            manual: !!options.manual
+        };
+    }
+
+    // Bilingual canonical employment ontology. The legacy definitions above are
+    // replaced here at runtime so old embedded callers remain compatible.
+    definitions = [
+        ontologyDefinition("identity.firstName", "firstName", "identity", ["first name", "given name", "forename", "nombre", "nombre de pila", "nombres"], { auto: ["given-name"] }),
+        ontologyDefinition("identity.middleName", "middleName", "identity", ["middle name", "second name", "segundo nombre"]),
+        ontologyDefinition("identity.lastName", "lastName", "identity", ["last name", "family name", "surname", "apellido", "apellidos"], { auto: ["family-name"] }),
+        ontologyDefinition("identity.preferredName", "preferredName", "identity", ["preferred name", "display name", "nombre preferido"]),
+        ontologyDefinition("identity.fullName", "fullName", "identity", ["full name", "complete name", "nombre completo"]),
+        ontologyDefinition("contact.email", "email", "contact", ["email", "e mail", "email address", "correo", "correo electronico"], { inputType: "email", auto: ["email"] }),
+        ontologyDefinition("contact.phone", "phone", "contact", ["phone", "telephone", "mobile", "cell", "phone number", "telefono", "celular", "numero telefonico"], { inputType: "tel", auto: ["tel", "tel-national"] }),
+        ontologyDefinition("address.line1", "address", "address", ["address", "street address", "street", "direccion", "direccion de calle", "calle"], { auto: ["street-address"] }),
+        ontologyDefinition("address.line2", "address2", "address", ["address line 2", "apartment", "unit", "suite", "address complement", "complemento", "departamento"]),
+        ontologyDefinition("address.city", "city", "address", ["city", "town", "municipality", "ciudad", "comuna"], { auto: ["address-level2"] }),
+        ontologyDefinition("address.region", "region", "address", ["state", "province", "region", "estado", "provincia", "region administrativa"], { auto: ["address-level1"] }),
+        ontologyDefinition("address.postalCode", "postal", "address", ["postal code", "zip code", "zip", "postcode", "codigo postal"], { auto: ["postal-code"] }),
+        ontologyDefinition("address.country", "country", "address", ["country", "pais", "país", "country of residence"], { auto: ["country"] }),
+        ontologyDefinition("links.linkedin", "linkedin", "links", ["linkedin", "linked in", "linkedin profile"]),
+        ontologyDefinition("links.github", "github", "links", ["github", "git hub", "github profile"]),
+        ontologyDefinition("links.portfolio", "portfolio", "links", ["portfolio", "website", "personal website", "professional website", "sitio personal", "web personal"]),
+        ontologyDefinition("links.website", "website", "links", ["website", "web site", "personal url", "url personal", "pagina web"]),
+        ontologyDefinition("experience.jobTitle", "jobTitle", "experience", ["job title", "current title", "position", "role", "cargo", "puesto", "titulo profesional", "titulo del cargo"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral"] }),
+        ontologyDefinition("experience.company", "company", "experience", ["company", "employer", "organization", "employer name", "empresa", "empleador", "organizacion"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral"] }),
+        ontologyDefinition("experience.location", "location", "experience", ["work location", "job location", "location", "ubicacion", "ubicacion laboral"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.startDate", "startDate", "experience", ["start date", "start month", "start year", "date started", "fecha de inicio", "mes de inicio", "ano de inicio", "desde"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.endDate", "endDate", "experience", ["end date", "end month", "end year", "date ended", "fecha de termino", "mes de termino", "ano de termino", "hasta"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.description", "description", "experience", ["responsibilities", "description", "duties", "achievements", "responsabilidades", "descripcion", "logros"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.years", "years", "experience", ["years of experience", "years experience", "professional experience", "anos de experiencia", "aÃ±os de experiencia"], { review: true }),
+        ontologyDefinition("education.institution", "institution", "education", ["school", "university", "college", "institution", "educational institution", "universidad", "institucion", "instituto"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.degree", "degree", "education", ["degree", "education level", "qualification", "academic degree", "grado", "titulo", "nivel educacional"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.fieldOfStudy", "fieldOfStudy", "education", ["field of study", "major", "specialization", "area of study", "carrera", "especialidad", "area de estudio"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.startDate", "startDate", "education", ["education start date", "study start", "start of studies", "inicio de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.endDate", "endDate", "education", ["education end date", "graduation date", "study end", "fin de estudios", "fecha de graduacion"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("authorization.work", "authorization", "authorization", ["work authorization", "authorized to work", "right to work", "work permit", "permiso de trabajo", "autorizacion laboral", "autorizacion de trabajo"], { review: true }),
+        ontologyDefinition("authorization.sponsorship", "sponsorship", "authorization", ["visa sponsorship", "sponsorship", "employer sponsorship", "sponsor", "patrocinio", "auspicio de visa"], { review: true }),
+        ontologyDefinition("availability.startDate", "availableStartDate", "availability", ["available start date", "availability date", "when can you start", "start availability", "fecha de disponibilidad", "disponibilidad para comenzar"], { review: true }),
+        ontologyDefinition("availability.relocation", "relocation", "availability", ["relocate", "relocation", "willing to move", "move for work", "reubicacion", "dispuesto a trasladarse"], { review: true }),
+        ontologyDefinition("availability.workMode", "workMode", "availability", ["work mode", "work arrangement", "remote", "hybrid", "onsite", "modalidad", "remoto", "hibrido", "presencial"]),
+        ontologyDefinition("availability.employmentType", "employmentType", "availability", ["employment type", "job type", "contract type", "full time", "part time", "tipo de empleo", "tipo de contrato", "tiempo completo", "media jornada"]),
+        ontologyDefinition("availability.noticePeriod", "noticePeriod", "availability", ["notice period", "start notice", "availability notice", "periodo de aviso", "preaviso"], { review: true, manual: true }),
+        ontologyDefinition("salary.expectation", "salary", "salary", ["salary", "compensation", "pay expectation", "expected salary", "salary expectation", "pretension de renta", "remuneracion", "expectativa salarial"], { review: true }),
+        ontologyDefinition("skills.list", "skills", "skills", ["skills", "technical skills", "key skills", "competencies", "habilidades", "competencias", "conocimientos tecnicos"]),
+        ontologyDefinition("files.resume", "resume", "files", ["resume", "cv", "curriculum", "curriculum vitae", "curriculo", "hoja de vida"], { file: true, manual: true }),
+        ontologyDefinition("files.coverLetter", "coverLetter", "files", ["cover letter", "motivation letter", "carta de presentacion", "carta de motivacion"], { file: true, manual: true }),
+        ontologyDefinition("files.portfolio", "portfolioFile", "files", ["portfolio file", "work sample", "writing sample", "muestra de trabajo"], { file: true, manual: true }),
+        ontologyDefinition("questions.open", "openQuestion", "questions", ["open question", "additional information", "other information", "comments", "tell us about yourself", "informacion adicional", "comentarios"], { manual: true }),
+        ontologyDefinition("questions.motivation", "motivation", "questions", ["why do you want", "why interested", "motivation", "why this role", "por que te interesa", "motivacion"], { manual: true }),
+        ontologyDefinition("questions.whyCompany", "whyCompany", "questions", ["why this company", "why us", "por que esta empresa", "por que nosotros"], { manual: true }),
+        ontologyDefinition("sensitive.birthDate", "birthDate", "sensitive", ["date of birth", "birth date", "dob", "fecha de nacimiento"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.gender", "gender", "sensitive", ["gender", "sex", "genero", "sexo"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.ethnicity", "ethnicity", "sensitive", ["ethnicity", "race", "etnia", "raza"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.disability", "disability", "sensitive", ["disability", "discapacidad"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.veteran", "veteran", "sensitive", ["veteran", "military service", "veterano", "servicio militar"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.criminalRecord", "criminalRecord", "sensitive", ["criminal record", "background check", "antecedentes penales", "registro criminal"], { sensitive: true, manual: true }),
+        ontologyDefinition("sensitive.consent", "consent", "sensitive", ["consent", "terms", "agreement", "privacy", "consentimiento", "terminos", "acuerdo", "privacidad"], { sensitive: true, manual: true })
+    ];
+
+    function contextText(element) {
+        var container = element && element.closest ? element.closest("fieldset, section, li, [data-testid], [class*='experience'], [class*='education']") : null;
+        return container ? normalize(container.innerText || container.textContent) : "";
+    }
+    function signalValues(element, label) {
+        return {
+            label: normalize(label), name: normalize(element.getAttribute && element.getAttribute("name")),
+            id: normalize(element.getAttribute && element.getAttribute("id")),
+            placeholder: normalize(element.getAttribute && element.getAttribute("placeholder")),
+            title: normalize(element.getAttribute && element.getAttribute("title")),
+            autocomplete: normalize(element.getAttribute && element.getAttribute("autocomplete")),
+            type: normalize(element.type || element.tagName), context: contextText(element)
+        };
+    }
+    function termScore(value, terms, source, signals) {
+        if (!value) return 0;
+        var best = 0, bestKind = "", bestTerm = "", words, found, i, j, term, current;
+        for (i = 0; i < terms.length; i++) {
+            term = normalize(terms[i]);
+            if (!term) continue;
+            current = 0;
+            if (value === term) { current = source === "label" ? 0.9 : 0.78; if (term.length <= 3) current -= 0.06; }
+            else if (value.indexOf(term) >= 0) current = source === "label" ? 0.62 : 0.54;
+            else {
+                words = term.split(" "); found = 0;
+                for (j = 0; j < words.length; j++) if (value.indexOf(words[j]) >= 0) found++;
+                if (words.length > 1 && found === words.length) current = source === "label" ? 0.55 : 0.48;
+            }
+            if (current > best) { best = current; bestKind = current >= 0.7 ? "exact" : (current >= 0.6 ? "contains" : "words"); bestTerm = term; }
+        }
+        if (best > 0) signals.push(source + ":" + bestKind + ":" + bestTerm);
+        return best;
+    }
+    function ontologyScore(definitionValue, label, element) {
+        var signals = [], conflicts = [], values = signalValues(element, label), base = 0, support = 0, local, i;
+        ["label", "name", "id", "placeholder", "title"].forEach(function (key) {
+            local = termScore(values[key], definitionValue.terms, key === "label" ? "label" : "attribute", signals);
+            if (local > base) base = local; else if (local >= 0.48) support += 0.07;
+        });
+        var autoMatch = false;
+        if (definitionValue.auto) for (i = 0; i < definitionValue.auto.length; i++) if (normalize(definitionValue.auto[i]) === values.autocomplete) autoMatch = true;
+        if (autoMatch) { base = Math.max(base, 0.9); signals.push("autocomplete:" + values.autocomplete); }
+        if (definitionValue.inputType && values.type === definitionValue.inputType) { base = Math.max(base, base > 0 ? base + 0.1 : 0.88); signals.push("type:" + values.type); }
+        if (definitionValue.contextTerms && hasAny(values.context, definitionValue.contextTerms)) { base += 0.18; signals.push("context:" + definitionValue.context); }
+        if (definitionValue.context === "experience" && hasAny(values.context, ["education", "academic", "educacion", "estudios"])) { conflicts.push({ canonicalField: "education", reason: "education-context" }); base -= 0.18; }
+        if (definitionValue.context === "education" && hasAny(values.context, ["experience", "employment", "work history", "experiencia", "empleo"])) { conflicts.push({ canonicalField: "experience", reason: "experience-context" }); base -= 0.18; }
+        for (i = 0; i < definitionValue.negativeTerms.length; i++) if (hasAny(values.label, [definitionValue.negativeTerms[i]])) { conflicts.push({ canonicalField: definitionValue.canonicalField, reason: "negative-signal:" + normalize(definitionValue.negativeTerms[i]) }); base -= 0.2; }
+        return { definition: definitionValue, score: Math.max(0, Math.min(1, base + Math.min(0.14, support))), signals: signals, conflicts: conflicts };
+    }
+    function bestDefinition(element, label) {
+        var candidates = [], i, candidate, best, second, ambiguous;
+        for (i = 0; i < definitions.length; i++) { candidate = ontologyScore(definitions[i], label, element); if (candidate.score > 0) candidates.push(candidate); }
+        candidates.sort(function (a, b) { return b.score - a.score; });
+        best = candidates.length ? candidates[0] : null; second = candidates.length > 1 ? candidates[1] : null;
+        if (!best) return null;
+        ambiguous = best.score >= 0.72 && second && second.score >= 0.72 && (best.score - second.score) <= 0.08;
+        if (second && second.score >= 0.72 && (best.score - second.score) <= 0.12) best.conflicts.push({ canonicalField: second.definition.canonicalField, score: Math.round(second.score * 100) / 100, reason: "near-tie" });
+        var contextConflict = best.conflicts.some(function (conflict) {
+            return conflict.reason === "education-context" || conflict.reason === "experience-context";
+        });
+        best.ambiguous = !!ambiguous || contextConflict;
+        best.confidence = best.score;
+        best.reason = ambiguous ? "ambiguous-near-tie" : (contextConflict ? "context-conflict" : "best-ontology-match");
+        return best;
+    }
     function optionValue(select, wanted) {
         var target = normalize(wanted), options = select.options || [], best = null, bestScore = 0;
         for (var i = 0; i < options.length; i++) {
@@ -204,6 +338,26 @@
         }
         return hasAny(textValue, ["education", "educacion", "educación"]) && !hasAny(textValue, ["experience", "employment", "experiencia", "empleo"]) ? { kind: "education", index: index } : { kind: "experience", index: index };
     }
+    function matchDecision(match, label, reason, action) {
+        var definitionValue = match && match.definition ? match.definition : null;
+        return {
+            label: label || (definitionValue ? definitionValue.key : "Campo"),
+            field: definitionValue ? definitionValue.key : "",
+            canonicalField: definitionValue ? definitionValue.canonicalField : "",
+            category: definitionValue ? definitionValue.category : "",
+            score: match ? Math.round(match.score * 100) / 100 : 0,
+            signals: match && match.signals ? match.signals.slice(0) : [],
+            conflicts: match && match.conflicts ? match.conflicts.slice(0) : [],
+            reason: reason || (match ? match.reason : "no-match"),
+            action: action || "skipped"
+        };
+    }
+    function addDecision(output, bucket, match, label, reason, action) {
+        var decision = matchDecision(match, label, reason, action);
+        output.matches.push(decision);
+        if (bucket) bucket.push(decision);
+        return decision;
+    }
     function fill(profile, options) {
         options = options || {};
         if (!profile) return { filled: [], review: [], skipped: [], resumeFieldFound: false, error: "Se requiere una sesión de llenado explícita." };
@@ -213,9 +367,10 @@
             state.timer = null;
             state.retryCount = 0;
         }
-        if (state.filling) return { filled: [], review: [], skipped: [], resumeFieldFound: false, busy: true };
+        if (state.filling) return { filled: [], review: [], skipped: [], matches: [], resumeFieldFound: false, busy: true };
         state.filling = true;
-        var output = { filled: [], review: [], skipped: [], resumeFieldFound: false };
+        var output = { filled: [], review: [], skipped: [], matches: [], resumeFieldFound: false };
+        var resumeDetectedCount = 0;
         try {
             var controls = document.querySelectorAll("input, select, textarea");
             if (!controls || controls.length === 0) {
@@ -226,15 +381,41 @@
             for (var i = 0; i < controls.length; i++) {
                 var element = controls[i], type = normalize(element.type || element.tagName);
                 var label = controlText(element);
+                var match = bestDefinition(element, label);
                 if (element.type === "file") {
-                    if (!visible(element)) continue;
+                    if (match && match.score >= 0.72) {
+                        if (!visible(element)) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
+                        else if (!match.ambiguous && match.definition.key === "resume") {
+                            element.setAttribute("data-rpm-job-file", "resume");
+                            resumeDetectedCount++;
+                            addDecision(output, null, match, label, "resume-field-detected-manual-attachment", "detected");
+                        } else {
+                            if (element.removeAttribute) element.removeAttribute("data-rpm-job-file");
+                            addDecision(output, output.skipped, match, label, match.ambiguous ? match.reason : "manual-file-attachment", "skipped");
+                        }
+                        continue;
+                    }
+                    if (!visible(element)) {
+                        if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
+                        continue;
+                    }
                     if (hasAny(label, ["resume", "cv", "curriculum", "curriculo", "currículum"])) { element.setAttribute("data-rpm-job-file", "resume"); output.resumeFieldFound = true; }
                     continue;
                 }
-                if (!visible(element)) continue;
-                if (element.type === "password" || type === "button" || type === "submit") continue;
+                if (!visible(element)) {
+                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
+                    continue;
+                }
+                if (element.type === "password" || type === "button" || type === "submit") {
+                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "protected-control", "skipped");
+                    continue;
+                }
                 if (isProtected(label)) {
-                    output.skipped.push({ label: label || "Campo protegido", reason: "manual confirmation" });
+                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "sensitive-manual-confirmation", "skipped");
+                    continue;
+                }
+                if ((element.type === "checkbox" || element.type === "radio") && match && match.score >= 0.72) {
+                    addDecision(output, output.review, match, label || "Respuesta si/no", "choice-manual-confirmation", "review");
                     continue;
                 }
                 if (element.type === "checkbox" || element.type === "radio") {
@@ -242,31 +423,59 @@
                         output.review.push({ label: label || "Respuesta sí/no", reason: "manual confirmation" });
                     continue;
                 }
-                var match = bestDefinition(element, label);
-                if (!match || match.confidence < 0.72) continue;
-                var section = sectionIndex(element, match.definition.key), index = section.index;
-                var value = profileValue(profile, match.definition.key, index);
-                if (match.definition.key === "company" || match.definition.key === "jobTitle" || match.definition.key === "location" || match.definition.key === "startDate" || match.definition.key === "endDate" || match.definition.key === "description") {
-                    var experiences = get(profile, "Experiences") || [];
-                    if (!experiences[index]) value = profileValue(profile, match.definition.key, null);
+                if (!match || match.score < 0.72) {
+                    if (match) addDecision(output, output.skipped, match, label, "below-confidence-threshold", "skipped");
+                    continue;
                 }
-                if (match.definition.key === "degree" || match.definition.key === "fieldOfStudy") {
+                if (match.ambiguous) {
+                    addDecision(output, output.skipped, match, label, match.reason || "ambiguous-near-tie", "skipped");
+                    continue;
+                }
+                if (match.definition.sensitive) {
+                    addDecision(output, output.skipped, match, label, "sensitive-manual-confirmation", "skipped");
+                    continue;
+                }
+                var section = sectionIndex(element, match.definition.key), index = section.index;
+                var kind = match.definition.context === "education" ? "education" : (match.definition.context === "experience" ? "experience" : section.kind);
+                var value = profileValue(profile, match.definition.key, index, kind);
+                if (match.definition.category === "experience") {
+                    var experiences = get(profile, "Experiences") || [];
+                    if (!experiences[index]) value = profileValue(profile, match.definition.key, null, kind);
+                }
+                if (match.definition.category === "education") {
                     var education = get(profile, "Education") || [];
                     if (!education[index]) value = "";
                 }
-                if (value === "" || value == null) continue;
+                if (match.definition.manual) {
+                    addDecision(output, output.review, match, label, "manual-review-required", "review");
+                    continue;
+                }
+                if (value === "" || value == null) {
+                    addDecision(output, output.skipped, match, label, "profile-value-missing", "skipped");
+                    continue;
+                }
                 value = formatValue(element, match.definition.key, value, label);
-                if (!value) continue;
-                if (text(element.value).trim() && !get(profile, "OverwriteExisting")) { output.skipped.push({ label: label || match.definition.key, field: match.definition.key, reason: "existing" }); continue; }
+                if (!value) {
+                    addDecision(output, output.skipped, match, label, "formatted-value-empty", "skipped");
+                    continue;
+                }
+                if (text(element.value).trim() && !get(profile, "OverwriteExisting")) {
+                    addDecision(output, output.skipped, match, label, "existing-value", "skipped");
+                    continue;
+                }
                 var review = !!match.definition.review || match.confidence < 0.88;
                 if (element.dataset && element.dataset.rpmJobApplyValue === text(value) &&
-                    text(element.value) === text(value)) continue;
+                    text(element.value) === text(value)) {
+                    addDecision(output, null, match, label, "already-filled", "unchanged");
+                    continue;
+                }
                 if (setValue(element, value)) {
                     highlight(element, review);
                     if (element.dataset) element.dataset.rpmJobApplyValue = text(value);
-                    (review ? output.review : output.filled).push({ label: label || match.definition.key, field: match.definition.key, confidence: Math.round(match.confidence * 100) / 100 });
-                } else output.review.push({ label: label || match.definition.key, field: match.definition.key, reason: "verification" });
+                    addDecision(output, review ? output.review : output.filled, match, label, review ? "filled-needs-review" : "filled", review ? "review" : "filled");
+                } else addDecision(output, output.review, match, label, "verification-failed", "review");
             }
+            output.resumeFieldFound = resumeDetectedCount > 0;
             installObserver();
             return output;
         } finally { state.filling = false; }
@@ -293,7 +502,18 @@
             if (state.profile && !state.filling) fill(state.profile, { silent: true, retry: true });
         }, 500);
     }
-    var api = { version: VERSION, __rpmJobApplyOwned: true, fill: fill, normalize: normalize };
+    function getOntology() {
+        return definitions.map(function (item) {
+            return {
+                canonicalField: item.canonicalField,
+                key: item.key,
+                category: item.category,
+                sensitive: !!item.sensitive,
+                manual: !!item.manual
+            };
+        });
+    }
+    var api = { version: VERSION, ontologyVersion: "2.0", __rpmJobApplyOwned: true, fill: fill, normalize: normalize, getOntology: getOntology };
     try {
         Object.defineProperty(global, "RpmJobApply", {
             value: Object.freeze ? Object.freeze(api) : api,

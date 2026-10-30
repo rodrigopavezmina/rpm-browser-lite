@@ -337,6 +337,7 @@ namespace ChatGPTLite
         public List<string> Filled { get; private set; }
         public List<string> Review { get; private set; }
         public List<string> Skipped { get; private set; }
+        public List<JobApplyMatch> Matches { get; private set; }
         public bool ResumeFieldFound { get; private set; }
         public string Error { get; private set; }
 
@@ -350,6 +351,7 @@ namespace ChatGPTLite
             Filled = new List<string>();
             Review = new List<string>();
             Skipped = new List<string>();
+            Matches = new List<JobApplyMatch>();
             Error = string.Empty;
         }
 
@@ -376,6 +378,7 @@ namespace ChatGPTLite
                 result.Filled.AddRange(ReadLabels(values, "filled"));
                 result.Review.AddRange(ReadLabels(values, "review"));
                 result.Skipped.AddRange(ReadLabels(values, "skipped"));
+                result.Matches.AddRange(ReadMatches(values, "matches"));
             }
             catch (Exception)
             {
@@ -425,6 +428,109 @@ namespace ChatGPTLite
                     yield return label.Trim();
             }
         }
+
+        private static IEnumerable<JobApplyMatch> ReadMatches(Dictionary<string, object> values, string key)
+        {
+            object raw;
+            if (!values.TryGetValue(key, out raw) || raw == null)
+                yield break;
+            IEnumerable items = raw as IEnumerable;
+            if (items == null || raw is string)
+                yield break;
+            foreach (object item in items)
+            {
+                Dictionary<string, object> descriptor = item as Dictionary<string, object>;
+                if (descriptor == null) continue;
+                JobApplyMatch match = new JobApplyMatch();
+                match.Label = ReadDescriptorString(descriptor, "label");
+                match.Field = ReadDescriptorString(descriptor, "field");
+                match.CanonicalField = ReadDescriptorString(descriptor, "canonicalField");
+                match.Category = ReadDescriptorString(descriptor, "category");
+                match.Reason = ReadDescriptorString(descriptor, "reason");
+                match.Action = ReadDescriptorString(descriptor, "action");
+                match.Score = ReadDescriptorDouble(descriptor, "score");
+                match.Signals = ReadStringValues(descriptor, "signals");
+                match.Conflicts = ReadConflictValues(descriptor, "conflicts");
+                yield return match;
+            }
+        }
+
+        private static string ReadDescriptorString(Dictionary<string, object> descriptor, string key)
+        {
+            object value;
+            return descriptor.TryGetValue(key, out value) && value != null
+                ? Convert.ToString(value, CultureInfo.InvariantCulture)
+                : string.Empty;
+        }
+
+        private static double ReadDescriptorDouble(Dictionary<string, object> descriptor, string key)
+        {
+            object value;
+            if (!descriptor.TryGetValue(key, out value) || value == null) return 0;
+            try { return Convert.ToDouble(value, CultureInfo.InvariantCulture); }
+            catch { return 0; }
+        }
+
+        private static List<string> ReadStringValues(Dictionary<string, object> descriptor, string key)
+        {
+            List<string> values = new List<string>();
+            object raw;
+            if (!descriptor.TryGetValue(key, out raw) || raw == null || raw is string) return values;
+            IEnumerable items = raw as IEnumerable;
+            if (items == null) return values;
+            foreach (object item in items)
+            {
+                if (item != null) values.Add(Convert.ToString(item, CultureInfo.InvariantCulture));
+            }
+            return values;
+        }
+
+        private static List<JobApplyConflict> ReadConflictValues(Dictionary<string, object> descriptor, string key)
+        {
+            List<JobApplyConflict> values = new List<JobApplyConflict>();
+            object raw;
+            if (!descriptor.TryGetValue(key, out raw) || raw == null || raw is string) return values;
+            IEnumerable items = raw as IEnumerable;
+            if (items == null) return values;
+            foreach (object item in items)
+            {
+                Dictionary<string, object> conflict = item as Dictionary<string, object>;
+                if (conflict == null) continue;
+                values.Add(new JobApplyConflict
+                {
+                    CanonicalField = ReadDescriptorString(conflict, "canonicalField"),
+                    Reason = ReadDescriptorString(conflict, "reason"),
+                    Score = ReadDescriptorDouble(conflict, "score")
+                });
+            }
+            return values;
+        }
+    }
+
+    internal sealed class JobApplyMatch
+    {
+        public JobApplyMatch()
+        {
+            Signals = new List<string>();
+            Conflicts = new List<JobApplyConflict>();
+        }
+
+        public string Label { get; set; }
+        public string Field { get; set; }
+        public string CanonicalField { get; set; }
+        public string Category { get; set; }
+        public double Score { get; set; }
+        public List<string> Signals { get; set; }
+        public List<JobApplyConflict> Conflicts { get; set; }
+        public string Reason { get; set; }
+        public string Action { get; set; }
+    }
+
+    internal sealed class JobApplyConflict
+    {
+        public string CanonicalField { get; set; }
+        public double Score { get; set; }
+        public string Reason { get; set; }
     }
 
     internal sealed class ResumeAttachResult
