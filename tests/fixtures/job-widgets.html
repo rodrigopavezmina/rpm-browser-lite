@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<body>
+  <form id="job-application-widgets">
+    <label for="country">País</label>
+    <select id="country" name="country" autocomplete="country">
+      <option value="">Selecciona un país</option>
+      <option value="CL">Chile</option>
+      <option value="US">United States</option>
+    </select>
+
+    <label for="region">Región</label>
+    <select id="region" name="region" autocomplete="address-level1" disabled></select>
+
+    <fieldset>
+      <legend>Tipo de empleo</legend>
+      <label><input type="radio" name="employmentType" value="full_time"> Full time</label>
+      <label><input type="radio" name="employmentType" value="part_time"> Part time</label>
+    </fieldset>
+
+    <label for="framework-combobox">Modalidad</label>
+    <input id="framework-combobox" role="combobox" aria-autocomplete="list" aria-controls="work-mode-list" name="workMode">
+    <div id="work-mode-list" role="listbox">
+      <div role="option" id="mode-remote" data-value="remote">Remote</div>
+      <div role="option" id="mode-hybrid" data-value="hybrid">Hybrid</div>
+    </div>
+
+    <label for="language">Idioma preferido</label>
+    <div id="language" role="listbox" aria-label="Preferred language">
+      <div role="option" id="language-es" data-value="es">Español</div>
+      <div role="option" id="language-en" data-value="en">English</div>
+    </div>
+
+    <label for="remote-search">Ciudad</label>
+    <input id="remote-search" role="combobox" aria-autocomplete="remote" aria-controls="remote-results" name="city">
+    <div id="remote-results" role="listbox"></div>
+
+    <label><input type="radio" name="workAuthorization" value="yes"> ¿Autorizado legalmente para trabajar?</label>
+    <label><input type="checkbox" name="consent" value="yes"> Acepto los términos y la privacidad</label>
+    <label for="gender">Género</label>
+    <select id="gender" name="gender"><option value="">Prefiero no responder</option></select>
+  </form>
+</body>
+</html>

@@ -52,6 +52,62 @@
         return bits.join(" ").replace(/\s+/g, " ").trim();
     }
     function isProtected(label) { return hasAny(label, protectedWords); }
+    // Choice controls need a stricter policy than text fields.  Legal,
+    // eliminatory, consent, signature and demographic answers are never
+    // selected automatically, even when a profile value exists.
+    var legalOrEliminatoryWords = [
+        "authorization", "authorized to work", "work permit", "sponsorship", "visa",
+        "eligibility", "eligible", "citizenship", "legal", "right to work",
+        "consent", "privacy", "terms", "agreement", "acknowledge", "certify",
+        "signature", "sign here", "background check", "criminal", "disclosure",
+        "demographic", "ethnicity", "race", "gender", "sex", "disability", "veteran",
+        "nationality", "date of birth", "fecha de nacimiento", "autorizacion laboral",
+        "permiso de trabajo", "patrocinio", "consentimiento", "firma", "raza", "genero",
+        "sexo", "discapacidad", "veterano", "nacionalidad", "antecedentes penales"
+    ];
+    function isLegalOrEliminatory(label, definition) {
+        if (definition && definition.sensitive && ["birthDate", "gender", "ethnicity", "disability", "veteran"].indexOf(definition.key) >= 0) return false;
+        if (!definition && hasAny(label, ["demographic", "ethnicity", "race", "gender", "sex", "disability", "veteran", "date of birth", "fecha de nacimiento"])) return false;
+        return !!(definition && (definition.sensitive || definition.review &&
+            (definition.key === "authorization" || definition.key === "sponsorship"))) ||
+            hasAny(label, legalOrEliminatoryWords);
+    }
+    function controlKind(element) {
+        var role = normalize(element && element.getAttribute && element.getAttribute("role"));
+        var tag = normalize(element && element.tagName);
+        var type = normalize(element && element.type);
+        if (tag === "select") return "select";
+        if (type === "radio") return "radio";
+        if (type === "checkbox") return "checkbox";
+        if (role === "combobox" || (element && element.getAttribute &&
+            hasAny(element.getAttribute("aria-haspopup"), ["listbox", "true"]))) return "combobox";
+        if (role === "listbox") return "listbox";
+        if (element && element.getAttribute && element.getAttribute("contenteditable") === "true") return "contenteditable";
+        if (type === "file") return "file";
+        return "text";
+    }
+    function choiceSynonyms(value) {
+        var normalized = normalize(value), groups = [
+            ["chile", "cl", "chl", "republica de chile"],
+            ["united states", "united states of america", "usa", "us", "u s", "estados unidos", "eeuu"],
+            ["spain", "espana", "es", "reino de espana"],
+            ["yes", "si", "true", "y", "affirmative", "de acuerdo", "acepto"],
+            ["no", "false", "n", "negative"],
+            ["full time", "fulltime", "tiempo completo", "jornada completa"],
+            ["part time", "parttime", "tiempo parcial", "media jornada"]
+        ];
+        for (var i = 0; i < groups.length; i++) if (groups[i].indexOf(normalized) >= 0) return groups[i];
+        return [normalized];
+    }
+    function choiceScore(wanted, candidate) {
+        var target = normalize(wanted), value = normalize(candidate);
+        if (!target || !value) return 0;
+        if (target === value) return 1;
+        var targetSynonyms = choiceSynonyms(target), valueSynonyms = choiceSynonyms(value);
+        for (var i = 0; i < targetSynonyms.length; i++) if (valueSynonyms.indexOf(targetSynonyms[i]) >= 0) return 0.98;
+        if (value.indexOf(target) >= 0 || target.indexOf(value) >= 0) return 0.84;
+        return 0;
+    }
     function firstNonEmpty(values) { for (var i = 0; i < values.length; i++) if (text(values[i]).trim()) return text(values[i]).trim(); return ""; }
     function joinName(profile) { return [get(profile, "FirstName"), get(profile, "MiddleName"), get(profile, "LastName")].filter(function (x) { return text(x).trim(); }).join(" "); }
     function dateParts(value) {
@@ -497,7 +553,7 @@
         for (var i = 0; i < options.length; i++) {
             var option = options[i], candidate = normalize((option.text || "") + " " + (option.value || ""));
             if (!candidate || option.disabled) continue;
-            var current = candidate === target ? 1 : (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0 ? 0.85 : 0);
+            var current = Math.max(choiceScore(target, normalize(option.text || "")), choiceScore(target, normalize(option.value || "")), choiceScore(target, candidate));
             var candidateMonth = monthNumber(candidate);
             if (targetMonth && candidateMonth && targetMonth === candidateMonth) current = Math.max(current, 0.92);
             if ((target === "chile" || target === "cl" || target === "chl") && hasAny(candidate, ["chile", "cl", "chl"])) current = 1;
@@ -525,26 +581,126 @@
             var option = optionValue(element, stringValue);
             if (!option) return false;
             element.value = option.value;
+        } else if (element.getAttribute && element.getAttribute("contenteditable") === "true") {
+            element.textContent = stringValue;
+            if (element.innerText !== undefined) element.innerText = stringValue;
         } else {
-            var prototype = element.tagName.toLowerCase() === "textarea" ? global.HTMLTextAreaElement.prototype : global.HTMLInputElement.prototype;
-            var setter = Object.getOwnPropertyDescriptor(prototype, "value");
+            var constructor = element.tagName.toLowerCase() === "textarea" ? global.HTMLTextAreaElement : global.HTMLInputElement;
+            var prototype = constructor && constructor.prototype;
+            var setter = prototype && Object.getOwnPropertyDescriptor(prototype, "value");
             if (setter && setter.set) setter.set.call(element, stringValue); else element.value = stringValue;
         }
         ["input", "change", "blur"].forEach(function (name) {
             try { element.dispatchEvent(new Event(name, { bubbles: true })); } catch (error) { }
         });
-        return text(element.value) === stringValue || element.tagName.toLowerCase() === "select";
+        return text(element.value != null ? element.value : (element.innerText || element.textContent)) === stringValue || element.tagName.toLowerCase() === "select";
     }
     function setChecked(element, checked) {
         try {
             element.checked = !!checked;
+            var accepted = true;
             ["input", "change"].forEach(function (name) {
-                try { element.dispatchEvent(new Event(name, { bubbles: true })); } catch (error) { }
+                try { if (element.dispatchEvent(new Event(name, { bubbles: true })) === false) accepted = false; } catch (error) { accepted = false; }
             });
-            return element.checked === !!checked;
+            return accepted && element.checked === !!checked;
         } catch (error) {
             return false;
         }
+    }
+    function dispatchControlEvents(element) {
+        var accepted = true;
+        ["input", "change", "blur"].forEach(function (name) {
+            try { if (element.dispatchEvent(new Event(name, { bubbles: true })) === false) accepted = false; } catch (error) { accepted = false; }
+        });
+        return accepted;
+    }
+    function widgetOptions(element, kind) {
+        if (!element) return [];
+        if (kind === "select") return element.options || [];
+        var root = element;
+        var id = element.getAttribute && (element.getAttribute("aria-controls") || element.getAttribute("aria-owns") || element.getAttribute("list"));
+        if (id && document.getElementById) root = document.getElementById(id) || root;
+        var options = [];
+        if (root.querySelectorAll) {
+            try { options = Array.prototype.slice.call(root.querySelectorAll("[role='option'], option")); } catch (error) { options = []; }
+        }
+        if (!options.length && element.options) options = Array.prototype.slice.call(element.options);
+        return options;
+    }
+    function widgetOptionText(option) {
+        if (!option) return "";
+        return text(option.textContent || option.innerText || option.label || option.getAttribute && option.getAttribute("aria-label") || "").trim();
+    }
+    function widgetOptionValue(option) {
+        if (!option) return "";
+        return text(option.value || option.getAttribute && (option.getAttribute("data-value") || option.getAttribute("value")) || widgetOptionText(option)).trim();
+    }
+    function bestWidgetOption(options, wanted) {
+        var best = null, score = 0;
+        for (var i = 0; i < options.length; i++) {
+            var option = options[i];
+            if (option.disabled || option.getAttribute && option.getAttribute("aria-disabled") === "true") continue;
+            var current = Math.max(choiceScore(wanted, widgetOptionText(option)), choiceScore(wanted, widgetOptionValue(option)));
+            if (current > score) { best = option; score = current; }
+        }
+        return score >= 0.78 ? best : null;
+    }
+    function setWidgetSelection(element, kind, wanted) {
+        var options = widgetOptions(element, kind), option = bestWidgetOption(options, wanted);
+        if (!option) {
+            // A remote autocomplete/listbox may populate after the first input
+            // event.  Do not guess; leave a retryable manual-review marker.
+            if ((kind === "combobox" || kind === "listbox") && (!options.length || element.getAttribute && element.getAttribute("aria-autocomplete") === "remote")) {
+                if (kind === "combobox") {
+                    var prototype = element.tagName && element.tagName.toLowerCase() === "textarea" ? global.HTMLTextAreaElement : global.HTMLInputElement;
+                    var setter = prototype && Object.getOwnPropertyDescriptor(prototype.prototype, "value");
+                    if (setter && setter.set) setter.set.call(element, text(wanted)); else element.value = text(wanted);
+                    if (!dispatchControlEvents(element)) return { review: true, reason: "synthetic-event-rejected" };
+                }
+                return { pending: true, reason: "dynamic-options-pending" };
+            }
+            return { review: true, reason: "option-not-found" };
+        }
+        var optionValue = widgetOptionValue(option), optionText = widgetOptionText(option);
+        if (kind === "select") {
+            element.value = optionValue;
+            if (!dispatchControlEvents(element)) return { review: true, reason: "synthetic-event-rejected" };
+            return text(element.value) === optionValue ? { ok: true } : { review: true, reason: "verification-failed" };
+        }
+        if (kind === "combobox") {
+            var tag = element.tagName && element.tagName.toLowerCase();
+            var inputPrototype = tag === "textarea" ? global.HTMLTextAreaElement : global.HTMLInputElement;
+            var inputSetter = inputPrototype && Object.getOwnPropertyDescriptor(inputPrototype.prototype, "value");
+            if (inputSetter && inputSetter.set) inputSetter.set.call(element, optionText || optionValue); else element.value = optionText || optionValue;
+            if (element.setAttribute && option.id) element.setAttribute("aria-activedescendant", option.id);
+        } else {
+            if (element.setAttribute) {
+                if (option.id) element.setAttribute("aria-activedescendant", option.id);
+                element.setAttribute("data-rpm-job-value", optionValue || optionText);
+            }
+            if (element.value !== undefined) element.value = optionValue || optionText;
+            for (var i = 0; i < options.length; i++) if (options[i].setAttribute) options[i].setAttribute("aria-selected", options[i] === option ? "true" : "false");
+        }
+        if (!dispatchControlEvents(element)) return { review: true, reason: "synthetic-event-rejected" };
+        var actual = normalize(element.value || (element.getAttribute && (element.getAttribute("data-rpm-job-value") || element.getAttribute("aria-activedescendant"))) || "");
+        var expected = normalize(optionText || optionValue);
+        return actual === expected || choiceScore(actual, expected) >= 0.78 ? { ok: true } : { review: true, reason: "verification-failed" };
+    }
+    function renderChoice(element, kind, wanted, label, definition) {
+        if (isLegalOrEliminatory(label, definition)) return { review: true, reason: "legal-or-eliminatory-manual-confirmation" };
+        if (kind === "select" || kind === "combobox" || kind === "listbox") return setWidgetSelection(element, kind, wanted);
+        if (kind === "radio") {
+            var radioTarget = Math.max(choiceScore(wanted, element.value || ""), choiceScore(wanted, label));
+            if (radioTarget < 0.78) return { skip: true, reason: "radio-option-not-selected" };
+            return setChecked(element, true) ? { ok: true } : { review: true, reason: "verification-failed" };
+        }
+        if (kind === "checkbox") {
+            var normalizedWanted = normalize(wanted), checked = wanted === true || normalizedWanted === "true" || normalizedWanted === "yes" || normalizedWanted === "si";
+            if (wanted !== true && wanted !== false && normalizedWanted !== "true" && normalizedWanted !== "false" && normalizedWanted !== "yes" && normalizedWanted !== "no" && normalizedWanted !== "si")
+                return { review: true, reason: "checkbox-value-ambiguous" };
+            return setChecked(element, checked) ? { ok: true } : { review: true, reason: "verification-failed" };
+        }
+        return { review: true, reason: "unsupported-choice-control" };
     }
     function formatValue(element, key, value, label) {
         if (key === "relocation" || key === "sponsorship") value = value ? "Yes" : "No";
@@ -635,7 +791,7 @@
         var output = { filled: [], review: [], skipped: [], matches: [], resumeFieldFound: false };
         var resumeDetectedCount = 0;
         try {
-            var controls = document.querySelectorAll("input, select, textarea");
+            var controls = document.querySelectorAll("input, select, textarea, [role='combobox'], [role='listbox'], [contenteditable='true']");
             if (!controls || controls.length === 0) {
                 installObserver();
                 scheduleDynamicRetry();
@@ -643,20 +799,30 @@
             }
             var descriptors = [];
             for (var d = 0; d < controls.length; d++) {
-                var control = controls[d], controlLabel = controlText(control);
+                var control = controls[d], controlLabel = controlText(control), kind = controlKind(control);
                 var possibleCandidates = candidateDefinitions(control, controlLabel);
                 var controlType = normalize(control.type || control.tagName);
                 var assignable = visible(control) && controlType !== "password" && controlType !== "button" &&
-                    controlType !== "submit" && controlType !== "checkbox" && controlType !== "radio" && !isProtected(controlLabel);
+                    controlType !== "submit" && kind !== "checkbox" && kind !== "radio" && !isProtected(controlLabel);
                 descriptors.push({
-                    index: d, element: control, type: controlType,
+                    index: d, element: control, type: controlType, kind: kind,
                     label: controlLabel, block: blockInfo(control),
                     candidates: possibleCandidates, globalCandidates: assignable ? possibleCandidates : [], assignment: null
                 });
             }
             solveGlobalAssignments(descriptors);
-            for (var i = 0; i < controls.length; i++) {
-                var descriptor = descriptors[i], element = descriptor.element, type = descriptor.type;
+            var orderedDescriptors = descriptors.slice(0).sort(function (a, b) {
+                function priority(item) {
+                    var label = normalize(item.label);
+                    if (item.kind === "select" && hasAny(label, ["country", "pais", "paÃ­s"])) return 0;
+                    if (hasAny(label, ["region", "state", "province", "estado", "provincia"])) return 1;
+                    return 2;
+                }
+                var difference = priority(a) - priority(b);
+                return difference || a.index - b.index;
+            });
+            for (var i = 0; i < orderedDescriptors.length; i++) {
+                var descriptor = orderedDescriptors[i], element = descriptor.element, type = descriptor.type, kind = descriptor.kind;
                 var label = descriptor.label, match = descriptor.assignment;
                 var candidate = match || (descriptor.candidates.length ? descriptor.candidates[0] : null);
                 if (!match && candidate && candidate.score >= 0.72) {
@@ -691,8 +857,50 @@
                     if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "protected-control", "skipped");
                     continue;
                 }
+                if (["select", "combobox", "listbox", "checkbox", "radio"].indexOf(kind) >= 0 && isLegalOrEliminatory(label, candidate && candidate.definition)) {
+                    if (candidate && candidate.score >= 0.72) addDecision(output, output.review, candidate, label, "legal-or-eliminatory-manual-confirmation", "review", descriptor);
+                    else output.review.push({ label: label, reason: "legal-or-eliminatory-manual-confirmation", action: "review" });
+                    continue;
+                }
                 if (isProtected(label)) {
-                    if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "sensitive-manual-confirmation", "skipped");
+                    if (candidate && candidate.score >= 0.72) {
+                        var protectedReview = isLegalOrEliminatory(label, candidate.definition);
+                        addDecision(output, protectedReview ? output.review : output.skipped, candidate, label,
+                            protectedReview ? "legal-or-eliminatory-manual-confirmation" : "sensitive-manual-confirmation",
+                            protectedReview ? "review" : "skipped", descriptor);
+                    } else if (isLegalOrEliminatory(label, null)) output.review.push({ label: label, reason: "legal-or-eliminatory-manual-confirmation", action: "review" });
+                    continue;
+                }
+                if (["select", "combobox", "listbox", "checkbox", "radio"].indexOf(kind) >= 0 && candidate && candidate.score >= 0.72) {
+                    if (match && match.ambiguous) {
+                        addDecision(output, output.skipped, match, label, match.reason || "ambiguous-near-tie", "skipped", descriptor);
+                        continue;
+                    }
+                    var choiceKind = candidate.definition.key === "currentEmployment" ? "current" : kind;
+                    var choiceValue = profileValue(profile, candidate.definition.key, descriptor.block.index, descriptor.block.kind);
+                    if (choiceKind !== "current") {
+                        if (choiceValue === "" || choiceValue == null) {
+                            addDecision(output, output.review, candidate, label, isLegalOrEliminatory(label, candidate.definition) ? "legal-or-eliminatory-manual-confirmation" : "profile-value-missing", "review", descriptor);
+                            continue;
+                        }
+                        var renderedChoice = renderChoice(element, kind, choiceValue, label, candidate.definition);
+                        if (renderedChoice.pending || renderedChoice.review) addDecision(output, output.review, candidate, label, renderedChoice.reason, "review", descriptor);
+                        else if (renderedChoice.skip) addDecision(output, output.skipped, candidate, label, renderedChoice.reason, "skipped", descriptor);
+                        else if (renderedChoice.ok) {
+                            var choiceReview = !!candidate.definition.review || candidate.confidence < 0.88;
+                            highlight(element, choiceReview);
+                            addDecision(output, choiceReview ? output.review : output.filled, candidate, label, choiceReview ? "filled-needs-review" : "filled", choiceReview ? "review" : "filled", descriptor);
+                        }
+                        continue;
+                    }
+                    // Current-employment is the one checkbox we may mark, but
+                    // it remains a confirmation item and never an auto-submit.
+                    var currentLabel = normalize(label + " " + text(element.value));
+                    var affirmative = kind === "checkbox" || hasAny(currentLabel, ["yes", "si", "true", "currently", "present", "actual", "aqui", "aquÃ­"]);
+                    if (choiceValue === true && affirmative && setChecked(element, true)) {
+                        highlight(element, true);
+                        addDecision(output, output.review, candidate, label || "Currently working here", "current-employment-filled-confirmation", "review", descriptor);
+                    } else addDecision(output, output.review, candidate, label || "Currently working here", "current-employment-confirmation", "review", descriptor);
                     continue;
                 }
                 if ((element.type === "checkbox" || element.type === "radio") && candidate && candidate.score >= 0.72) {
