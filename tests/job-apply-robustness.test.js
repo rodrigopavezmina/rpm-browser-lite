@@ -111,6 +111,8 @@ assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApp
 assert.match(engine, /JobApplyTimeoutException/);
 assert.match(engine, /CancelAsync/);
 assert.match(engine, /fileCount/);
+assert.match(engine, /File\.Exists\(fullPath\)/);
+assert.match(engine, /DOM\.setFileInputFiles/);
 assert.match(engine, /List<JobApplyMatch> Matches/);
 assert.match(engine, /CanonicalField/);
 assert.match(engine, /BlockKey/);
@@ -119,6 +121,9 @@ assert.match(engine, /GlobalScore/);
 const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
 assert.match(browser, /JobApplyEngine\.CancelAsync\(CoreWebView2\)/);
+assert.match(browser, /core\.ProcessFailed/);
+assert.match(browser, /EnsureJobApplyPageStable/);
+assert.match(browser, /AwaitJobApplyNavigationAsync/);
 assert.match(browser, /initial-failed/);
 assert.match(browser, /manualmente si es necesario/);
 const program = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'Program.cs'), 'utf8');

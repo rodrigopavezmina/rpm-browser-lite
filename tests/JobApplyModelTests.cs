@@ -69,10 +69,11 @@ namespace ChatGPTLite
                 Expect(incomplete.FirstName == string.Empty && incomplete.ResumePath == string.Empty, "incomplete scalar values were not repaired");
 
                 string diagnostic = JobApplyDiagnostics.Message(
-                    "email=ana@example.com cv=C:\\Users\\Ana\\cv.pdf token=secret-value");
+                    "email=ana@example.com cv=C:\\Users\\Ana\\cv.pdf token=secret-value cookie=session-id");
                 Expect(diagnostic.IndexOf("ana@example.com", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked email");
                 Expect(diagnostic.IndexOf("cv.pdf", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked CV path");
                 Expect(diagnostic.IndexOf("secret-value", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked secret");
+                Expect(diagnostic.IndexOf("session-id", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked cookie");
                 Expect(JobApplyDiagnostics.Exception(new InvalidOperationException("sensitive page text")) == "InvalidOperationException", "diagnostic leaked exception details");
 
                 string encryptedPath = Path.Combine(directory, "profile.dat");

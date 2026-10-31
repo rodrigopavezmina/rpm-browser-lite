@@ -1885,6 +1885,7 @@ namespace ChatGPTLite
             summary.AppendLine("Si faltan campos, el portal usa un widget no accesible, un iframe o un componente personalizado.");
             summary.AppendLine("Completa esos campos manualmente, verifica fechas y adjuntos, y pulsa Enviar solo tú.");
             AppendJobApplyLabels(summary, "Revisa especialmente", result.Review);
+            AppendJobApplyLabels(summary, "Campos no completados manualmente", result.Skipped);
             summary.AppendLine();
             summary.AppendLine("Los campos amarillos necesitan revisión. La aplicación nunca pulsa Enviar por ti.");
 
