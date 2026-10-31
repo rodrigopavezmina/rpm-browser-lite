@@ -58,6 +58,8 @@ El flujo nunca envia la postulacion. No completa contrasenas, CAPTCHA, firmas, c
 
 Si un portal no acepta eventos sinteticos, usa el resumen del asistente para completar manualmente el campo marcado. El motor es generico y no depende de que el ATS interprete correctamente el PDF o LaTeX del CV: la fuente de verdad es el perfil revisado por el usuario.
 
+Las fechas laborales conservan su precision original: `AAAA-MM` no se convierte silenciosamente en un dia. Los formularios con `AAAA-MM-DD`, mes, ano, dia separado o selects de meses se completan cuando hay evidencia suficiente; si un campo exige un dia que no existe en el perfil, se muestra una fecha derivada para confirmacion y se deja el campo sin escribir.
+
 ## Estado del proyecto
 
 La rama `browser-lite-original` (igual que `main`) conserva RPM Browser Lite 2.8.33. Esta rama, `job-apply-turbo`, contiene únicamente la edición Turbo y sus artefactos usan nombres propios.
