@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM IA Job Apply Browser Lite Turbo";
-        public const string ProductVersion = "1.0.0";
+        public const string ProductVersion = "1.0.1";
         // This edition has its own release line. Never inherit the standard
         // browser update channel, otherwise its installer could replace Turbo.
         public const string DefaultUpdateManifestUrl = "";

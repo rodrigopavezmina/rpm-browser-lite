@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "1.0.0",
+    "version":  "1.0.1",
     "downloadUrl":  "",
-    "notes":  "RPM IA Job Apply Browser Lite Turbo has no automatic update channel configured yet.",
+    "notes":  "El botón de cadena permite arrastrar una página al Escritorio para crear un acceso directo .url; el área de arrastre es más grande.",
     "sha256":  ""
 }

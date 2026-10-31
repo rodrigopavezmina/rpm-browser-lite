@@ -9,15 +9,15 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("RPM IA Job Apply Browser Lite Turbo Setup")]
 [assembly: AssemblyProduct("RPM IA Job Apply Browser Lite Turbo")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 
 namespace ChatGPTLiteInstaller
 {
     internal static class Program
     {
         internal const string ProductName = "RPM IA Job Apply Browser Lite Turbo";
-        private const string ProductVersion = "1.0.0";
+        private const string ProductVersion = "1.0.1";
         private const string RegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RPM IA Job Apply Browser Lite Turbo";
         private const string ApplicationExecutable = "RPMIAJobApplyBrowserLiteTurbo.exe";
         private static readonly string[] PayloadFiles = new string[]

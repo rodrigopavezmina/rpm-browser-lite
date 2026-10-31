@@ -191,8 +191,9 @@ namespace ChatGPTLite
             _quickColorButton.FlatStyle = FlatStyle.Flat;
             _quickColorButton.FlatAppearance.BorderSize = 1;
             _quickColorButton.AccessibleName = "Quick window color";
-            _urlDragButton = CreateToolbarButton("🔗", 28);
-            _urlDragButton.Height = 28;
+            _urlDragButton = CreateToolbarButton("🔗", 38);
+            _urlDragButton.Height = 36;
+            _urlDragButton.Font = new Font("Segoe UI Symbol", 14f, FontStyle.Regular);
             _urlDragButton.FlatStyle = FlatStyle.Flat;
             _urlDragButton.FlatAppearance.BorderSize = 0;
             _urlDragButton.AccessibleName = "Drag current URL to a bookmark bar";
@@ -414,7 +415,7 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(_cloneButton, "Clone this window with the same page, title, ID, icon, color and notes");
             _toolTip.SetToolTip(_appearanceButton, "Click to choose an icon. Right-click for title, ID and advanced options.");
             _toolTip.SetToolTip(_quickColorButton, "Choose this window color");
-            _toolTip.SetToolTip(_urlDragButton, "Drag this URL to the bookmarks bar or a folder in Google Chrome");
+            _toolTip.SetToolTip(_urlDragButton, "Drag this link to the desktop to create a URL shortcut, or to a browser bookmarks bar");
             _toolTip.SetToolTip(homeButton, "Default home page (Ctrl+N)");
             _toolTip.SetToolTip(newButton, "New window (Ctrl+Shift+N)");
             _toolTip.SetToolTip(_jobApplyButton, "Completar esta postulación desde tu perfil local (Ctrl+Shift+A)");
@@ -1195,6 +1196,9 @@ namespace ChatGPTLite
             string bookmarkTitle = DisplayTitle;
             if (string.IsNullOrWhiteSpace(bookmarkTitle) || string.Equals(bookmarkTitle, "Browser window", StringComparison.OrdinalIgnoreCase))
                 bookmarkTitle = parsed.Host;
+            string shortcutPath = CreateDraggedUrlShortcut(parsed.AbsoluteUri, bookmarkTitle);
+            if (!string.IsNullOrWhiteSpace(shortcutPath) && File.Exists(shortcutPath))
+                data.SetData(DataFormats.FileDrop, true, new[] { shortcutPath });
             string encodedUrl = WebUtility.HtmlEncode(parsed.AbsoluteUri);
             string encodedTitle = WebUtility.HtmlEncode(bookmarkTitle);
             string htmlAnchor = "<a href=\"" + encodedUrl + "\">" + encodedTitle + "</a>";
@@ -1205,6 +1209,28 @@ namespace ChatGPTLite
             data.SetData("UniformResourceLocator", false, parsed.AbsoluteUri);
             data.SetData("UniformResourceLocatorW", false, Encoding.Unicode.GetBytes(parsed.AbsoluteUri + "\0"));
             DoDragDrop(data, DragDropEffects.Link | DragDropEffects.Copy);
+        }
+
+        private static string CreateDraggedUrlShortcut(string url, string title)
+        {
+            try
+            {
+                string directory = Path.Combine(Path.GetTempPath(), "RPM Browser Lite", "Dragged links");
+                Directory.CreateDirectory(directory);
+                string safeTitle = string.IsNullOrWhiteSpace(title) ? "Web page" : title.Trim();
+                foreach (char invalid in Path.GetInvalidFileNameChars())
+                    safeTitle = safeTitle.Replace(invalid, '_');
+                if (safeTitle.Length > 100)
+                    safeTitle = safeTitle.Substring(0, 100).Trim();
+                string path = Path.Combine(directory, safeTitle + " - " + Guid.NewGuid().ToString("N") + ".url");
+                string content = "[InternetShortcut]\r\nURL=" + url + "\r\nIconIndex=0\r\n";
+                File.WriteAllText(path, content, new UTF8Encoding(false));
+                return path;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public void ShowCustomization()
@@ -3002,7 +3028,7 @@ namespace ChatGPTLite
             {
                 _urlDragButton.Visible = true;
                 _urlDragButton.Left = left + 2;
-                _urlDragButton.Top = 12;
+                _urlDragButton.Top = 8;
                 _addressBox.Visible = true;
                 _addressBox.Left = _urlDragButton.Right + 2;
                 _addressBox.Top = 13;

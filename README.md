@@ -4,8 +4,8 @@ Edición independiente de RPM Browser Lite para Windows, enfocada en preparar y 
 
 ## Instalación independiente
 
-- Instalador x64: `RPM-IA-Job-Apply-Browser-Lite-Turbo-Setup-1.0.0-x64.exe`
-- Versión portable x64: `RPM-IA-Job-Apply-Browser-Lite-Turbo-Portable-1.0.0-x64.zip`
+- Instalador x64: `RPM-IA-Job-Apply-Browser-Lite-Turbo-Setup-1.0.1-x64.exe`
+- Versión portable x64: `RPM-IA-Job-Apply-Browser-Lite-Turbo-Portable-1.0.1-x64.zip`
 
 Se instala en `%LOCALAPPDATA%\Programs\RPM IA Job Apply Browser Lite Turbo`, sin tocar la instalación ni los accesos directos de RPM Browser Lite. También puede ejecutarse en paralelo con el navegador original.
 
@@ -35,7 +35,7 @@ La compilación usa el compilador de .NET Framework y descarga automáticamente 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\build.ps1 -ArtifactLabel 1.0.0 -BuildFolder build-job-apply-turbo
+.\build.ps1 -ArtifactLabel 1.0.1 -BuildFolder build-job-apply-turbo
 ```
 
 Los archivos generados quedan en `artifacts\` (instalador, portable y `SHA256SUMS`). Las carpetas `build-*`, `artifacts`, `.packages`, `bin` y `obj` están excluidas del repositorio para no subir binarios temporales ni dependencias descargadas.
