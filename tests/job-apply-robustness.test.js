@@ -124,6 +124,7 @@ assert.match(browser, /JobApplyEngine\.CancelAsync\(CoreWebView2\)/);
 assert.match(browser, /core\.ProcessFailed/);
 assert.match(browser, /EnsureJobApplyPageStable/);
 assert.match(browser, /AwaitJobApplyNavigationAsync/);
+assert.match(browser, /BrowserVersionString/);
 assert.match(browser, /initial-failed/);
 assert.match(browser, /manualmente si es necesario/);
 const program = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'Program.cs'), 'utf8');

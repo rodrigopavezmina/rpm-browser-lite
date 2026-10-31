@@ -76,9 +76,13 @@ const hidden = addControl('input', { type: 'text', name: 'hidden', hidden: true 
 const shadowHost = new Node('div', {}, body);
 const shadowInput = new Node('input', { type: 'text', name: 'shadow-name', 'aria-label': 'Shadow name' });
 shadowHost.shadowRoot = { querySelectorAll: selector => selector === "input,select,textarea,[contenteditable]" ? [shadowInput] : [] };
+const closedShadowHost = new Node('div', { 'aria-label': 'Closed shadow host' }, body);
+closedShadowHost.shadowRoot = null;
 const frame = new Node('iframe', {}, body);
 const frameInput = new Node('input', { type: 'text', name: 'frame-name', 'aria-label': 'Frame name' });
 frame.contentDocument = { querySelectorAll: selector => selector === "input,select,textarea,[contenteditable]" ? [frameInput] : [] };
+const inaccessibleFrame = new Node('iframe', { 'aria-label': 'Cross origin frame' }, body);
+Object.defineProperty(inaccessibleFrame, 'contentDocument', { get: () => { throw new Error('cross-origin'); } });
 
 const document = {
   title: 'Formulario sintético',
@@ -86,8 +90,8 @@ const document = {
   getElementById: id => ids[id] || null,
   querySelectorAll: selector => {
     if (selector === "input,select,textarea,[contenteditable]") return controls;
-    if (selector === '*') return [shadowHost, frame];
-    if (selector === 'iframe,frame') return [frame];
+    if (selector === '*') return [shadowHost, closedShadowHost, frame, inaccessibleFrame];
+    if (selector === 'iframe,frame') return [frame, inaccessibleFrame];
     if (selector.indexOf("label[for='") === 0) {
       const id = selector.slice(11, -2).replace(/\\'/g, "'");
       return [emailLabel].filter(x => x.attrs.for === id);
@@ -116,6 +120,7 @@ assert.strictEqual(afterInsertion.fields.find(x => x.name === 'frame-name').fing
 assert.ok(first.fields.some(x => x.type === 'contenteditable'));
 assert.ok(first.fields.some(x => x.name === 'shadow-name'));
 assert.ok(first.fields.some(x => x.name === 'frame-name'));
+assert.ok(!first.fields.some(x => x.name === 'closed-shadow-name'));
 assert.ok(first.fields.some(x => x.type === 'file'));
 assert.ok(first.fields.some(x => x.type === 'radio' && x.options.length === 2));
 assert.ok(first.fields.some(x => x.type === 'checkbox' && x.options.length === 1));
@@ -128,6 +133,7 @@ assert.doesNotMatch(source, /dispatchEvent/);
 assert.doesNotMatch(source, /\.click\s*\(/);
 assert.match(source, /ownerDocument/);
 assert.match(source, /identityCounts/);
+assert.match(source, /if \(frame\.contentDocument\)/);
 assert.strictEqual(email.value, '');
 
 const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'JobApplyAuditEngine.cs'), 'utf8');
