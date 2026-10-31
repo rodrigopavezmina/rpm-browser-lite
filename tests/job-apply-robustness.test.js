@@ -95,6 +95,8 @@ const second = window.RpmJobApply.fill(profile);
 assert.strictEqual(second.filled.length, 0);
 assert.ok(second.skipped.length >= 2);
 assert.match(source, /MAX_DYNAMIC_RETRIES/);
+assert.match(source, /observerRoot/);
+assert.match(source, /document\.documentElement/);
 assert.match(source, /scheduleDynamicRetry/);
 assert.match(source, /function cancel\(\)/);
 assert.match(source, /observer\.disconnect/);
@@ -110,6 +112,7 @@ assert.match(engine, /pageProfile\.ResumePath = string\.Empty/);
 assert.match(engine, /pageProfile\.FieldMetadata = new Dictionary<string, JobApplicationFieldMetadata>\(\)/);
 assert.match(engine, /JobApplyTimeoutException/);
 assert.match(engine, /CancelAsync/);
+assert.match(engine, /ObserveLateFailure/);
 assert.match(engine, /fileCount/);
 assert.match(engine, /File\.Exists\(fullPath\)/);
 assert.match(engine, /DOM\.setFileInputFiles/);
@@ -121,17 +124,51 @@ assert.match(engine, /DerivedValue/);
 
 const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
-assert.match(browser, /JobApplyEngine\.CancelAsync\(CoreWebView2\)/);
+assert.match(browser, /CancelJobApplySafely\(CoreWebView2\)/);
+assert.match(browser, /JobApplyEngine\.CancelAsync\(browser\)/);
+assert.match(browser, /await AwaitJobApplyOperationAsync\(/);
+assert.match(browser, /ObserveLateFailure/);
 assert.match(browser, /core\.ProcessFailed/);
 assert.match(browser, /EnsureJobApplyPageStable/);
 assert.match(browser, /AwaitJobApplyNavigationAsync/);
 assert.match(browser, /BrowserVersionString/);
 assert.match(browser, /initial-failed/);
 assert.match(browser, /manualmente si es necesario/);
+const auditEngine = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'JobApplyAuditEngine.cs'), 'utf8');
+assert.match(auditEngine, /ObserveLateFailure/);
 const appController = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'AppController.cs'), 'utf8');
 assert.match(appController, /profile\.Normalize\(\)/);
+assert.match(appController, /_environmentSync/);
+assert.match(appController, /completed\.IsFaulted/);
+assert.match(appController, /_environmentTask = null/);
 const program = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'Program.cs'), 'utf8');
 assert.match(program, /JobApplyDiagnostics\.Exception\(exception\)/);
 assert.doesNotMatch(program, /exception\.ToString\(\)/);
+
+// Replacing the document body/root is common in SPA portals. The observer must
+// reconnect to the new root instead of retaining a detached DOM tree.
+let observedRoot = null;
+let disconnected = 0;
+function FakeMutationObserver(callback) { this.callback = callback; }
+FakeMutationObserver.prototype.observe = function (root) { observedRoot = root; };
+FakeMutationObserver.prototype.disconnect = function () { disconnected++; };
+const dynamicWindow = { MutationObserver: FakeMutationObserver, setTimeout, clearTimeout };
+const rootOne = {};
+const rootTwo = {};
+const dynamicContext = {
+  window: dynamicWindow,
+  document: { body: rootOne, documentElement: rootOne, querySelectorAll: () => [] },
+  setTimeout,
+  clearTimeout,
+  Event: function Event() {}
+};
+vm.runInNewContext(source, dynamicContext, { filename: 'JobApplyScript.dynamic.test.js' });
+dynamicWindow.RpmJobApply.fill({ FirstName: 'Ana' });
+assert.strictEqual(observedRoot, rootOne);
+dynamicContext.document.documentElement = rootTwo;
+dynamicWindow.RpmJobApply.fill({ FirstName: 'Ana' }, { retry: true });
+assert.strictEqual(observedRoot, rootTwo);
+assert.ok(disconnected >= 1);
+dynamicWindow.RpmJobApply.cancel();
 
 console.log('job-apply-robustness: ok');

@@ -80,8 +80,21 @@ namespace ChatGPTLite
             TimeSpan remaining = deadline - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero) throw new JobApplyTimeoutException(message);
             Task completed = await Task.WhenAny(task, Task.Delay(remaining));
-            if (completed != task) throw new JobApplyTimeoutException(message);
+            if (completed != task)
+            {
+                ObserveLateFailure(task);
+                throw new JobApplyTimeoutException(message);
+            }
             return await task;
+        }
+
+        private static void ObserveLateFailure(Task task)
+        {
+            if (task == null)
+                return;
+            task.ContinueWith(
+                delegate(Task faulted) { Exception ignored = faulted.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
         }
 
         private static string ReadEmbeddedScript()

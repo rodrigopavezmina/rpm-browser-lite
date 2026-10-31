@@ -1771,9 +1771,9 @@ namespace ChatGPTLite
             }
             catch (Exception ex)
             {
-                // Fire-and-forget: blocking the WinForms thread here could prevent
-                // WebView2 from completing the cancellation request itself.
-                JobApplyEngine.CancelAsync(CoreWebView2);
+                // Use a guarded asynchronous helper because the legacy compiler
+                // used by the portable build disallows await in catch/finally.
+                CancelJobApplySafely(CoreWebView2);
                 _jobApplySessionActive = false;
                 _jobApplySessionHost = string.Empty;
                 _jobApplyPreparedPages.Clear();
@@ -1806,14 +1806,42 @@ namespace ChatGPTLite
             }
         }
 
+        private static void CancelJobApplySafely(CoreWebView2 browser)
+        {
+            try
+            {
+                Task cancellation = JobApplyEngine.CancelAsync(browser);
+                cancellation.ContinueWith(
+                    delegate(Task completed) { Exception ignored = completed.Exception; },
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+            }
+            catch
+            {
+                // WebView2 may already be disposed or crashed. Manual recovery
+                // remains safe even when script cancellation is unavailable.
+            }
+        }
+
         private async Task AwaitJobApplyOperationAsync(Task operation, TimeSpan timeout, string message)
         {
             if (operation == null)
                 throw new InvalidOperationException(message);
             Task completed = await Task.WhenAny(operation, Task.Delay(timeout));
             if (completed != operation)
+            {
+                ObserveLateFailure(operation);
                 throw new JobApplyTimeoutException(message);
+            }
             await operation;
+        }
+
+        private static void ObserveLateFailure(Task operation)
+        {
+            if (operation == null)
+                return;
+            operation.ContinueWith(
+                delegate(Task faulted) { Exception ignored = faulted.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
         }
 
         private async Task AwaitJobApplyNavigationAsync(TimeSpan timeout)

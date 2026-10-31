@@ -3,8 +3,8 @@
     if (global.RpmJobApply && global.RpmJobApply.__rpmJobApplyOwned) return;
 
     var VERSION = "2.0.0";
-    var MAX_DYNAMIC_RETRIES = 12;
-    var state = { profile: null, observer: null, filling: false, timer: null, retryCount: 0 };
+    var MAX_DYNAMIC_RETRIES = 30;
+    var state = { profile: null, observer: null, observerRoot: null, filling: false, timer: null, retryCount: 0 };
     var protectedWords = [
         "password", "captcha", "recaptcha", "security code", "social security", "ssn",
         "date of birth", "birth date", "fecha de nacimiento", "ethnicity", "race", "gender",
@@ -996,17 +996,25 @@
         } finally { state.filling = false; }
     }
     function installObserver() {
-        if (!global.MutationObserver && !document.body) return;
-        if (state.observer || !global.MutationObserver || !document.body) {
-            if (!document.body) scheduleDynamicRetry();
+        var root = document.documentElement || document.body;
+        if (!global.MutationObserver && !root) return;
+        if (state.observer && state.observerRoot === root) return;
+        if (state.observer) {
+            try { state.observer.disconnect(); } catch (error) { }
+            state.observer = null;
+            state.observerRoot = null;
+        }
+        if (!global.MutationObserver || !root) {
+            if (!root) scheduleDynamicRetry();
             return;
         }
-        state.observer = new MutationObserver(function () {
+        state.observer = new global.MutationObserver(function () {
             if (state.timer) global.clearTimeout(state.timer);
             state.timer = null;
             scheduleDynamicRetry();
         });
-        state.observer.observe(document.body, { childList: true, subtree: true });
+        state.observerRoot = root;
+        state.observer.observe(root, { childList: true, subtree: true });
     }
     function scheduleDynamicRetry() {
         if (!global.MutationObserver && !document.body) return;
@@ -1025,6 +1033,7 @@
             try { state.observer.disconnect(); } catch (error) { }
             state.observer = null;
         }
+        state.observerRoot = null;
         state.profile = null;
         state.filling = false;
         return { cancelled: true };

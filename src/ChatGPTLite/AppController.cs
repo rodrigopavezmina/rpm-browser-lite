@@ -40,6 +40,7 @@ namespace ChatGPTLite
         private readonly AltTriplePressHook _altTriplePressHook;
         private readonly System.Windows.Forms.Timer _libraryRefreshTimer;
         private Task<CoreWebView2Environment> _environmentTask;
+        private readonly object _environmentSync = new object();
         private Task _extensionInstallTask;
         private LibraryForm _library;
         private SettingsForm _settings;
@@ -144,19 +145,37 @@ namespace ChatGPTLite
 
         public Task<CoreWebView2Environment> GetEnvironmentAsync()
         {
-            if (_environmentTask == null)
+            lock (_environmentSync)
             {
-                int cacheMb = Math.Max(64, State.Settings.CacheSizeMb);
-                long cacheBytes = (long)cacheMb * 1024L * 1024L;
-                CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions();
-                options.AreBrowserExtensionsEnabled = State.Settings.BrowserExtensionsEnabled == true;
-                options.AdditionalBrowserArguments =
-                    "--autoplay-policy=user-gesture-required " +
-                    "--disable-features=OverlayScrollbar,OverlayScrollbars " +
-                    "--disk-cache-size=" + cacheBytes.ToString();
-                _environmentTask = CoreWebView2Environment.CreateAsync(null, _paths.WebViewDirectory, options);
+                if (_environmentTask == null)
+                {
+                    int cacheMb = Math.Max(64, State.Settings.CacheSizeMb);
+                    long cacheBytes = (long)cacheMb * 1024L * 1024L;
+                    CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions();
+                    options.AreBrowserExtensionsEnabled = State.Settings.BrowserExtensionsEnabled == true;
+                    options.AdditionalBrowserArguments =
+                        "--autoplay-policy=user-gesture-required " +
+                        "--disable-features=OverlayScrollbar,OverlayScrollbars " +
+                        "--disk-cache-size=" + cacheBytes.ToString();
+                    Task<CoreWebView2Environment> created = CoreWebView2Environment.CreateAsync(null, _paths.WebViewDirectory, options);
+                    _environmentTask = created;
+                    // A failed runtime/profile initialization must not poison all
+                    // future restore attempts with the same faulted Task.
+                    created.ContinueWith(
+                        delegate(Task<CoreWebView2Environment> completed)
+                        {
+                            if (!completed.IsFaulted && !completed.IsCanceled)
+                                return;
+                            lock (_environmentSync)
+                            {
+                                if (object.ReferenceEquals(_environmentTask, completed))
+                                    _environmentTask = null;
+                            }
+                        },
+                        TaskContinuationOptions.ExecuteSynchronously);
+                }
+                return _environmentTask;
             }
-            return _environmentTask;
         }
 
         public Task InstallConfiguredExtensionsAsync(CoreWebView2Profile profile)

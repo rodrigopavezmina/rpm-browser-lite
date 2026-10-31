@@ -19,7 +19,10 @@ namespace ChatGPTLite
             @"(?:[A-Z]:\\|\\\\)[^\r\n""']+",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex Secret = new Regex(
-            @"(?i)\b(password|passwd|token|secret|cookie|authorization|api[-_ ]?key)\s*[:=]\s*[^\s;]+",
+            @"(?i)\b(password|passwd|token|secret|cookie|set-cookie|authorization|api[-_ ]?key)\s*[:=]\s*(?:bearer\s+)?[^\s;]+",
+            RegexOptions.Compiled);
+        private static readonly Regex Bearer = new Regex(
+            @"(?i)\bbearer\s+[A-Za-z0-9._~+\-/=]+",
             RegexOptions.Compiled);
 
         public static string Host(string url)
@@ -60,6 +63,7 @@ namespace ChatGPTLite
             safe = Email.Replace(safe, "<email>");
             safe = WindowsPath.Replace(safe, "<path>");
             safe = Secret.Replace(safe, "$1=<redacted>");
+            safe = Bearer.Replace(safe, "Bearer <redacted>");
             safe = safe.Replace('\r', ' ').Replace('\n', ' ');
             return Limit(safe, 200);
         }

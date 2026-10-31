@@ -289,8 +289,20 @@ namespace ChatGPTLite
 
             Task completed = await Task.WhenAny(task, Task.Delay(remaining));
             if (completed != task)
+            {
+                ObserveLateFailure(task);
                 throw new JobApplyTimeoutException(message);
+            }
             return await task;
+        }
+
+        private static void ObserveLateFailure(Task task)
+        {
+            if (task == null)
+                return;
+            task.ContinueWith(
+                delegate(Task faulted) { Exception ignored = faulted.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
         }
 
         private static Dictionary<string, object> ParseDictionary(string raw, JavaScriptSerializer serializer)

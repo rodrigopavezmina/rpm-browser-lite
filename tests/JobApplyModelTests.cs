@@ -98,6 +98,10 @@ namespace ChatGPTLite
                 Expect(diagnostic.IndexOf("cv.pdf", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked CV path");
                 Expect(diagnostic.IndexOf("secret-value", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked secret");
                 Expect(diagnostic.IndexOf("session-id", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked cookie");
+                string headerDiagnostic = JobApplyDiagnostics.Message(
+                    "Authorization: Bearer abc.def-123 Set-Cookie: session=private-value");
+                Expect(headerDiagnostic.IndexOf("abc.def-123", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked bearer token");
+                Expect(headerDiagnostic.IndexOf("private-value", StringComparison.OrdinalIgnoreCase) < 0, "diagnostic leaked set-cookie value");
                 Expect(JobApplyDiagnostics.Exception(new InvalidOperationException("sensitive page text")) == "InvalidOperationException", "diagnostic leaked exception details");
 
                 string encryptedPath = Path.Combine(directory, "profile.dat");
