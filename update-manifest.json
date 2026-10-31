@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.33",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.33/RPM-Browser-Lite-Setup-2.8.33-x64.exe",
-    "notes":  "Soporte controlado para extensiones Edge/Chromium locales y restauración sin destello blanco al salir de hibernación.",
-    "sha256":  "3CE644D71A083B14D7805CBD09523A8967E43BE871DF4CA27B8DE3A78219B202"
+    "version":  "2.8.34",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.34/RPM-Browser-Lite-Setup-2.8.34-x64.exe",
+    "notes":  "El botón de cadena ahora permite arrastrar una página al Escritorio para crear un acceso directo .url; el área de arrastre es más grande.",
+    "sha256":  ""
 }
