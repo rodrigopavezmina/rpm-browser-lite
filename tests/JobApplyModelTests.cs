@@ -38,6 +38,19 @@ namespace ChatGPTLite
                 Expect(profile.GetFieldMetadata("Experiences[0].Company") != null, "nested experience metadata was not created");
                 Expect(profile.MetadataSchemaVersion == JobApplicationProfile.CurrentMetadataSchemaVersion, "metadata schema was not repaired");
 
+                JobApplicationProfile regional = new JobApplicationProfile
+                {
+                    AvailableStartDate = "31/12/2026",
+                    Experiences = new System.Collections.Generic.List<JobExperience>
+                    {
+                        new JobExperience { Company = "Acme", Title = "Engineer", StartDate = "03/2024", EndDate = "12.2024" }
+                    }
+                };
+                regional.Normalize();
+                Expect(regional.AvailableStartDate == "2026-12-31", "regional full date was not normalized");
+                Expect(regional.Experiences[0].StartDate == "2024-03", "regional month was not normalized");
+                Expect(regional.Experiences[0].EndDate == "2024-12", "dotted month was not normalized");
+
                 profile.SetFieldMetadata("FirstName", new JobApplicationFieldMetadata
                 {
                     NormalizedValue = "Ana",
