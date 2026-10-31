@@ -1030,6 +1030,10 @@ namespace ChatGPTLite
             }
 
             profile = current.Clone();
+            // Legacy profiles may contain regional date strings. Normalize only
+            // the operation snapshot so the stored DPAPI profile is untouched
+            // until the user explicitly saves it again.
+            profile.Normalize();
             return true;
         }
 

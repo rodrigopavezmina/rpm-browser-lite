@@ -480,6 +480,7 @@ namespace ChatGPTLite
                 match.BlockKey = ReadDescriptorString(descriptor, "blockKey");
                 match.BlockKind = ReadDescriptorString(descriptor, "blockKind");
                 match.BlockIndex = ReadDescriptorInt(descriptor, "blockIndex");
+                match.DerivedValue = ReadDescriptorString(descriptor, "derivedValue");
                 match.Reason = ReadDescriptorString(descriptor, "reason");
                 match.Action = ReadDescriptorString(descriptor, "action");
                 match.Score = ReadDescriptorDouble(descriptor, "score");
@@ -565,6 +566,7 @@ namespace ChatGPTLite
         public string BlockKey { get; set; }
         public string BlockKind { get; set; }
         public int BlockIndex { get; set; }
+        public string DerivedValue { get; set; }
         public double Score { get; set; }
         public double GlobalScore { get; set; }
         public List<string> Signals { get; set; }

@@ -1886,6 +1886,7 @@ namespace ChatGPTLite
             summary.AppendLine("Completa esos campos manualmente, verifica fechas y adjuntos, y pulsa Enviar solo tú.");
             AppendJobApplyLabels(summary, "Revisa especialmente", result.Review);
             AppendJobApplyLabels(summary, "Campos no completados manualmente", result.Skipped);
+            AppendJobApplyDerivedDates(summary, result.Matches);
             summary.AppendLine();
             summary.AppendLine("Los campos amarillos necesitan revisión. La aplicación nunca pulsa Enviar por ti.");
 
@@ -1909,6 +1910,23 @@ namespace ChatGPTLite
                 summary.AppendLine("• " + label.Trim());
             if (labels.Count > 7)
                 summary.AppendLine("• … y " + (labels.Count - 7).ToString() + " más");
+        }
+
+        private static void AppendJobApplyDerivedDates(StringBuilder summary, IList<JobApplyMatch> matches)
+        {
+            if (summary == null || matches == null)
+                return;
+            List<JobApplyMatch> derived = matches.Where(delegate(JobApplyMatch match)
+            {
+                return match != null && !string.IsNullOrWhiteSpace(match.DerivedValue);
+            }).Take(5).ToList();
+            if (derived.Count == 0)
+                return;
+            summary.AppendLine();
+            summary.AppendLine("Fechas derivadas (requieren confirmación):");
+            foreach (JobApplyMatch match in derived)
+                summary.AppendLine("• " + (string.IsNullOrWhiteSpace(match.Label) ? match.Field : match.Label) + ": " + match.DerivedValue);
+            summary.AppendLine("No se escribió el día derivado; confirma la fecha en el portal.");
         }
 
         private async Task InitializeBrowserAsync(bool navigate)

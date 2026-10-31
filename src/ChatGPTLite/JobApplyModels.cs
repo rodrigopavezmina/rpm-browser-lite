@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.Mail;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChatGPTLite
 {
@@ -197,8 +198,8 @@ namespace ChatGPTLite
                 EnsureFieldMetadata(prefix + "Company", experience.Company, NormalizeWords(experience.Company), "professional");
                 EnsureFieldMetadata(prefix + "Title", experience.Title, NormalizeWords(experience.Title), "professional");
                 EnsureFieldMetadata(prefix + "Location", experience.Location, NormalizeWords(experience.Location), "personal");
-                EnsureFieldMetadata(prefix + "StartDate", experience.StartDate, NormalizeMonth(experience.StartDate), "professional");
-                EnsureFieldMetadata(prefix + "EndDate", experience.EndDate, NormalizeMonth(experience.EndDate), "professional");
+                EnsureFieldMetadata(prefix + "StartDate", experience.StartDate, NormalizeEmploymentDate(experience.StartDate), "professional");
+                EnsureFieldMetadata(prefix + "EndDate", experience.EndDate, NormalizeEmploymentDate(experience.EndDate), "professional");
                 EnsureFieldMetadata(prefix + "Description", experience.Description, NormalizeMultiline(experience.Description), "professional");
                 if (experience.IsCurrent)
                     EnsureFieldMetadata(prefix + "IsCurrent", "true", "true", "professional");
@@ -211,8 +212,8 @@ namespace ChatGPTLite
                 EnsureFieldMetadata(prefix + "Institution", education.Institution, NormalizeWords(education.Institution), "professional");
                 EnsureFieldMetadata(prefix + "Degree", education.Degree, NormalizeWords(education.Degree), "professional");
                 EnsureFieldMetadata(prefix + "FieldOfStudy", education.FieldOfStudy, NormalizeWords(education.FieldOfStudy), "professional");
-                EnsureFieldMetadata(prefix + "StartDate", education.StartDate, NormalizeMonth(education.StartDate), "professional");
-                EnsureFieldMetadata(prefix + "EndDate", education.EndDate, NormalizeMonth(education.EndDate), "professional");
+                EnsureFieldMetadata(prefix + "StartDate", education.StartDate, NormalizeEmploymentDate(education.StartDate), "professional");
+                EnsureFieldMetadata(prefix + "EndDate", education.EndDate, NormalizeEmploymentDate(education.EndDate), "professional");
             }
 
             MetadataSchemaVersion = CurrentMetadataSchemaVersion;
@@ -449,11 +450,34 @@ namespace ChatGPTLite
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("es-CL"), DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("es-ES"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("en-US"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("pt-BR"), DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             return text;
+        }
+
+        /// <summary>
+        /// Normalizes an employment/education date without throwing away a day
+        /// that the user actually supplied. Month-only values stay YYYY-MM;
+        /// complete values stay YYYY-MM-DD. Ambiguous numeric dates are kept
+        /// verbatim so the UI can request confirmation instead of guessing a
+        /// locale or inventing a day.
+        /// </summary>
+        internal static string NormalizeEmploymentDate(string value)
+        {
+            string text = ValueOrEmpty(value).Trim();
+            if (text.Length == 0) return string.Empty;
+
+            bool ambiguous;
+            string full = TryNormalizeFullDate(text, out ambiguous);
+            if (full.Length > 0) return full;
+            if (ambiguous) return text;
+            return NormalizeMonth(text);
         }
 
         internal static bool IsExactMonth(string value)
@@ -467,6 +491,23 @@ namespace ChatGPTLite
         {
             return DateTime.TryParseExact(value, "yyyy-MM", CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out date);
+        }
+
+        internal static bool IsExactEmploymentDate(string value)
+        {
+            DateTime parsed;
+            return TryGetEmploymentDate(value, out parsed);
+        }
+
+        internal static bool TryGetEmploymentDate(string value, out DateTime date)
+        {
+            date = default(DateTime);
+            string text = ValueOrEmpty(value).Trim();
+            if (DateTime.TryParseExact(text, "yyyy-MM", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out date)) return true;
+            if (DateTime.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out date)) return true;
+            return false;
         }
 
         internal static string NormalizeWords(string value)
@@ -495,6 +536,10 @@ namespace ChatGPTLite
         {
             string text = ValueOrEmpty(value).Trim();
             if (text.Length == 0) return string.Empty;
+            bool ambiguous;
+            string strict = TryNormalizeFullDate(text, out ambiguous);
+            if (strict.Length > 0 || ambiguous)
+                return strict.Length > 0 ? strict : text;
             DateTime parsed;
             string[] formats =
             {
@@ -506,11 +551,65 @@ namespace ChatGPTLite
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("es-CL"), DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("es-ES"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (DateTime.TryParse(text, new CultureInfo("en-US"), DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, new CultureInfo("pt-BR"), DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out parsed))
                 return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             return text;
+        }
+
+        private static string TryNormalizeFullDate(string text, out bool ambiguous)
+        {
+            ambiguous = false;
+            DateTime parsed;
+            string[] invariantFormats =
+            {
+                "yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd", "yyyyMMdd"
+            };
+            if (DateTime.TryParseExact(text, invariantFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces, out parsed))
+                return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            Match numeric = Regex.Match(text, @"^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$");
+            if (numeric.Success)
+            {
+                int first = int.Parse(numeric.Groups[1].Value, CultureInfo.InvariantCulture);
+                int second = int.Parse(numeric.Groups[2].Value, CultureInfo.InvariantCulture);
+                int year = int.Parse(numeric.Groups[3].Value, CultureInfo.InvariantCulture);
+                int day;
+                int month;
+                if (first > 12 && second <= 12) { day = first; month = second; }
+                else if (second > 12 && first <= 12) { day = second; month = first; }
+                else
+                {
+                    ambiguous = true;
+                    return string.Empty;
+                }
+                try
+                {
+                    parsed = new DateTime(year, month, day);
+                    return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+
+            string[] cultures = { "es-CL", "es-ES", "en-US" };
+            foreach (string cultureName in cultures)
+            {
+                if (DateTime.TryParse(text, new CultureInfo(cultureName),
+                    DateTimeStyles.AllowWhiteSpaces, out parsed) &&
+                    Regex.IsMatch(text, "[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]") &&
+                    Regex.Matches(text, @"\d+").Count >= 2)
+                    return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+            return string.Empty;
         }
 
         private static bool IsExactDate(string value)
@@ -599,8 +698,8 @@ namespace ChatGPTLite
             Company = JobApplicationProfile.NormalizeWords(Company);
             Title = JobApplicationProfile.NormalizeWords(Title);
             Location = JobApplicationProfile.NormalizeWords(Location);
-            StartDate = JobApplicationProfile.NormalizeMonth(StartDate);
-            EndDate = IsCurrent ? string.Empty : JobApplicationProfile.NormalizeMonth(EndDate);
+            StartDate = JobApplicationProfile.NormalizeEmploymentDate(StartDate);
+            EndDate = IsCurrent ? string.Empty : JobApplicationProfile.NormalizeEmploymentDate(EndDate);
             Description = Description.Trim();
         }
 
@@ -633,20 +732,20 @@ namespace ChatGPTLite
             if (Title.Length == 0) errors.Add(prefix + "ingresa el cargo.");
             if (StartDate.Length == 0)
                 errors.Add(prefix + "ingresa la fecha de inicio (AAAA-MM).");
-            else if (!JobApplicationProfile.IsExactMonth(StartDate))
-                errors.Add(prefix + "la fecha de inicio debe usar AAAA-MM.");
+            else if (!JobApplicationProfile.IsExactEmploymentDate(StartDate))
+                errors.Add(prefix + "la fecha de inicio debe usar AAAA-MM o AAAA-MM-DD.");
             if (!IsCurrent)
             {
                 if (EndDate.Length == 0)
                     errors.Add(prefix + "ingresa la fecha de término o marca Actual.");
-                else if (!JobApplicationProfile.IsExactMonth(EndDate))
-                    errors.Add(prefix + "la fecha de término debe usar AAAA-MM.");
+                else if (!JobApplicationProfile.IsExactEmploymentDate(EndDate))
+                    errors.Add(prefix + "la fecha de término debe usar AAAA-MM o AAAA-MM-DD.");
             }
 
             DateTime start;
             DateTime end;
-            if (!IsCurrent && JobApplicationProfile.TryGetMonth(StartDate, out start) &&
-                JobApplicationProfile.TryGetMonth(EndDate, out end) && end < start)
+            if (!IsCurrent && JobApplicationProfile.TryGetEmploymentDate(StartDate, out start) &&
+                JobApplicationProfile.TryGetEmploymentDate(EndDate, out end) && end < start)
                 errors.Add(prefix + "la fecha de término no puede ser anterior al inicio.");
         }
     }
@@ -675,8 +774,8 @@ namespace ChatGPTLite
             Institution = JobApplicationProfile.NormalizeWords(Institution);
             Degree = JobApplicationProfile.NormalizeWords(Degree);
             FieldOfStudy = JobApplicationProfile.NormalizeWords(FieldOfStudy);
-            StartDate = JobApplicationProfile.NormalizeMonth(StartDate);
-            EndDate = JobApplicationProfile.NormalizeMonth(EndDate);
+            StartDate = JobApplicationProfile.NormalizeEmploymentDate(StartDate);
+            EndDate = JobApplicationProfile.NormalizeEmploymentDate(EndDate);
         }
 
         public JobEducation Clone()
@@ -704,15 +803,15 @@ namespace ChatGPTLite
             string prefix = "Educación " + number + ": ";
             if (Institution.Length == 0) errors.Add(prefix + "ingresa la institución.");
             if (Degree.Length == 0) errors.Add(prefix + "ingresa el título o grado.");
-            if (StartDate.Length > 0 && !JobApplicationProfile.IsExactMonth(StartDate))
-                errors.Add(prefix + "la fecha de inicio debe usar AAAA-MM.");
-            if (EndDate.Length > 0 && !JobApplicationProfile.IsExactMonth(EndDate))
-                errors.Add(prefix + "la fecha de término debe usar AAAA-MM.");
+            if (StartDate.Length > 0 && !JobApplicationProfile.IsExactEmploymentDate(StartDate))
+                errors.Add(prefix + "la fecha de inicio debe usar AAAA-MM o AAAA-MM-DD.");
+            if (EndDate.Length > 0 && !JobApplicationProfile.IsExactEmploymentDate(EndDate))
+                errors.Add(prefix + "la fecha de término debe usar AAAA-MM o AAAA-MM-DD.");
 
             DateTime start;
             DateTime end;
-            if (JobApplicationProfile.TryGetMonth(StartDate, out start) &&
-                JobApplicationProfile.TryGetMonth(EndDate, out end) && end < start)
+            if (JobApplicationProfile.TryGetEmploymentDate(StartDate, out start) &&
+                JobApplicationProfile.TryGetEmploymentDate(EndDate, out end) && end < start)
                 errors.Add(prefix + "la fecha de término no puede ser anterior al inicio.");
         }
     }

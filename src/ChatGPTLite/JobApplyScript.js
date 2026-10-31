@@ -54,12 +54,23 @@
     function isProtected(label) { return hasAny(label, protectedWords); }
     function firstNonEmpty(values) { for (var i = 0; i < values.length; i++) if (text(values[i]).trim()) return text(values[i]).trim(); return ""; }
     function joinName(profile) { return [get(profile, "FirstName"), get(profile, "MiddleName"), get(profile, "LastName")].filter(function (x) { return text(x).trim(); }).join(" "); }
+    function dateParts(value) {
+        var source = text(value).trim(), match = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(source);
+        if (!match) return null;
+        return { source: source, year: match[1], month: match[2], day: match[3] || "", precision: match[3] ? "day" : "month" };
+    }
+    function dateComponent(value, component) {
+        var parts = dateParts(value);
+        if (!parts) return "";
+        if (component === "year") return parts.year;
+        if (component === "month") return parts.month;
+        return parts.day;
+    }
     function isoDate(value, kind) {
-        var source = text(value).trim();
-        if (!source) return "";
-        var match = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(source);
-        if (match) return kind === "month" ? match[1] + "-" + match[2] : (match[3] ? source : match[1] + "-" + match[2] + "-01");
-        return source;
+        var parts = dateParts(value);
+        if (!parts) return "";
+        if (kind === "month") return parts.year + "-" + parts.month;
+        return parts.precision === "day" ? parts.source : "";
     }
     function profileValue(profile, key, index, kind) {
         if (key === "fullName") return joinName(profile);
@@ -71,6 +82,13 @@
         if (key === "location") return item ? get(item, "Location") : "";
         if (key === "startDate") return item ? get(item, "StartDate") : get(profile, "AvailableStartDate");
         if (key === "endDate") return item ? (get(item, "IsCurrent") ? "Present" : get(item, "EndDate")) : "";
+        if (key === "startDateDay") return item ? get(item, "StartDate") : get(profile, "AvailableStartDate");
+        if (key === "startDateMonth") return item ? get(item, "StartDate") : get(profile, "AvailableStartDate");
+        if (key === "startDateYear") return item ? get(item, "StartDate") : get(profile, "AvailableStartDate");
+        if (key === "endDateDay") return item ? get(item, "EndDate") : "";
+        if (key === "endDateMonth") return item ? get(item, "EndDate") : "";
+        if (key === "endDateYear") return item ? get(item, "EndDate") : "";
+        if (key === "currentEmployment") return item ? !!get(item, "IsCurrent") : false;
         if (key === "description") return item ? get(item, "Description") : "";
         if (key === "institution") return item ? get(item, "Institution") : "";
         if (key === "degree") return item ? get(item, "Degree") : "";
@@ -185,14 +203,27 @@
         ontologyDefinition("experience.jobTitle", "jobTitle", "experience", ["job title", "current title", "position", "role", "cargo", "puesto", "titulo profesional", "titulo del cargo"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral"] }),
         ontologyDefinition("experience.company", "company", "experience", ["company", "employer", "organization", "employer name", "empresa", "empleador", "organizacion"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral"] }),
         ontologyDefinition("experience.location", "location", "experience", ["work location", "job location", "location", "ubicacion", "ubicacion laboral"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
-        ontologyDefinition("experience.startDate", "startDate", "experience", ["start date", "start month", "start year", "date started", "fecha de inicio", "mes de inicio", "ano de inicio", "desde"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
-        ontologyDefinition("experience.endDate", "endDate", "experience", ["end date", "end month", "end year", "date ended", "fecha de termino", "mes de termino", "ano de termino", "hasta"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.startDate.day", "startDateDay", "experience", ["start day", "day started", "day of start", "dia de inicio", "día de inicio"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.startDate.month", "startDateMonth", "experience", ["start month", "month started", "month of start", "mes de inicio"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.startDate.year", "startDateYear", "experience", ["start year", "year started", "year of start", "ano de inicio", "año de inicio"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.startDate", "startDate", "experience", ["start date", "date started", "fecha de inicio", "desde"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.endDate.day", "endDateDay", "experience", ["end day", "day ended", "day of end", "dia de termino", "día de término"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.endDate.month", "endDateMonth", "experience", ["end month", "month ended", "month of end", "mes de termino", "mes de término"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.endDate.year", "endDateYear", "experience", ["end year", "year ended", "year of end", "ano de termino", "año de término"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.endDate", "endDate", "experience", ["end date", "date ended", "fecha de termino", "fecha de término", "hasta"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
+        ontologyDefinition("experience.current", "currentEmployment", "experience", ["currently work here", "currently working here", "i currently work here", "current employment", "present", "actualmente trabajo aqui", "actualmente trabajo aquí", "trabajo actualmente", "trabajo aqui", "trabajo aquí"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"], review: true }),
         ontologyDefinition("experience.description", "description", "experience", ["responsibilities", "description", "duties", "achievements", "responsabilidades", "descripcion", "logros"], { context: "experience", contextTerms: ["experience", "employment", "work history", "experiencia", "empleo"] }),
         ontologyDefinition("experience.years", "years", "experience", ["years of experience", "years experience", "professional experience", "anos de experiencia", "aÃ±os de experiencia"], { review: true }),
         ontologyDefinition("education.institution", "institution", "education", ["school", "university", "college", "institution", "educational institution", "universidad", "institucion", "instituto"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
         ontologyDefinition("education.degree", "degree", "education", ["degree", "education level", "qualification", "academic degree", "grado", "titulo", "nivel educacional"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
         ontologyDefinition("education.fieldOfStudy", "fieldOfStudy", "education", ["field of study", "major", "specialization", "area of study", "carrera", "especialidad", "area de estudio"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.startDate.day", "startDateDay", "education", ["education start day", "study start day", "dia de inicio de estudios", "día de inicio de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.startDate.month", "startDateMonth", "education", ["education start month", "study start month", "mes de inicio de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.startDate.year", "startDateYear", "education", ["education start year", "study start year", "ano de inicio de estudios", "año de inicio de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
         ontologyDefinition("education.startDate", "startDate", "education", ["education start date", "study start", "start of studies", "inicio de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.endDate.day", "endDateDay", "education", ["education end day", "graduation day", "study end day", "dia de termino de estudios", "día de término de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.endDate.month", "endDateMonth", "education", ["education end month", "graduation month", "study end month", "mes de termino de estudios", "mes de término de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
+        ontologyDefinition("education.endDate.year", "endDateYear", "education", ["education end year", "graduation year", "study end year", "ano de termino de estudios", "año de término de estudios"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
         ontologyDefinition("education.endDate", "endDate", "education", ["education end date", "graduation date", "study end", "fin de estudios", "fecha de graduacion"], { context: "education", contextTerms: ["education", "academic", "educacion", "formacion", "estudios"] }),
         ontologyDefinition("authorization.work", "authorization", "authorization", ["work authorization", "authorized to work", "right to work", "work permit", "permiso de trabajo", "autorizacion laboral", "autorizacion de trabajo"], { review: true }),
         ontologyDefinition("authorization.sponsorship", "sponsorship", "authorization", ["visa sponsorship", "sponsorship", "employer sponsorship", "sponsor", "patrocinio", "auspicio de visa"], { review: true }),
@@ -462,16 +493,31 @@
     }
     function optionValue(select, wanted) {
         var target = normalize(wanted), options = select.options || [], best = null, bestScore = 0;
+        var targetMonth = monthNumber(target);
         for (var i = 0; i < options.length; i++) {
             var option = options[i], candidate = normalize((option.text || "") + " " + (option.value || ""));
             if (!candidate || option.disabled) continue;
             var current = candidate === target ? 1 : (candidate.indexOf(target) >= 0 || target.indexOf(candidate) >= 0 ? 0.85 : 0);
+            var candidateMonth = monthNumber(candidate);
+            if (targetMonth && candidateMonth && targetMonth === candidateMonth) current = Math.max(current, 0.92);
             if ((target === "chile" || target === "cl" || target === "chl") && hasAny(candidate, ["chile", "cl", "chl"])) current = 1;
             if ((target === "true" || target === "yes" || target === "si" || target === "sí") && hasAny(candidate, ["yes", "si", "sí", "true"])) current = Math.max(current, 0.8);
             if ((target === "false" || target === "no") && hasAny(candidate, ["no", "false"])) current = Math.max(current, 0.8);
             if (current > bestScore) best = option, bestScore = current;
         }
         return bestScore >= 0.78 ? best : null;
+    }
+    function monthNumber(value) {
+        var normalized = normalize(value), match = /(?:^| )(0?[1-9]|1[0-2])(?:$| )/.exec(normalized);
+        if (match) return ("0" + parseInt(match[1], 10)).slice(-2);
+        var names = [
+            ["january", "enero"], ["february", "febrero"], ["march", "marzo"], ["april", "abril"],
+            ["may", "mayo"], ["june", "junio"], ["july", "julio"], ["august", "agosto"],
+            ["september", "septiembre", "setiembre"], ["october", "octubre"], ["november", "noviembre"], ["december", "diciembre"]
+        ];
+        for (var i = 0; i < names.length; i++) for (var j = 0; j < names[i].length; j++)
+            if (normalized.indexOf(names[i][j]) >= 0) return ("0" + (i + 1)).slice(-2);
+        return "";
     }
     function setValue(element, value) {
         var stringValue = text(value);
@@ -489,17 +535,45 @@
         });
         return text(element.value) === stringValue || element.tagName.toLowerCase() === "select";
     }
+    function setChecked(element, checked) {
+        try {
+            element.checked = !!checked;
+            ["input", "change"].forEach(function (name) {
+                try { element.dispatchEvent(new Event(name, { bubbles: true })); } catch (error) { }
+            });
+            return element.checked === !!checked;
+        } catch (error) {
+            return false;
+        }
+    }
     function formatValue(element, key, value, label) {
         if (key === "relocation" || key === "sponsorship") value = value ? "Yes" : "No";
+        if (key === "startDateDay" || key === "startDateMonth" || key === "startDateYear" ||
+            key === "endDateDay" || key === "endDateMonth" || key === "endDateYear") {
+            var componentParts = dateParts(value), component = key.indexOf("Day") >= 0 ? "day" : (key.indexOf("Month") >= 0 ? "month" : "year");
+            if (!componentParts) return { value: "", needsConfirmation: component === "day", reason: "day-missing-month-precision" };
+            if (component === "day" && !componentParts.day) return { value: "", needsConfirmation: true, reason: "day-missing-month-precision" };
+            if (component === "month" && element.type === "month") return { value: componentParts.year + "-" + componentParts.month };
+            return { value: componentParts[component], reason: "date-component" };
+        }
         if (key === "startDate" || key === "endDate") {
             var normalizedLabel = normalize(label);
             var match = /^(\d{4})-(\d{2})/.exec(text(value));
-            if (match && hasAny(normalizedLabel, ["year", "ano", "año"]) && !hasAny(normalizedLabel, ["date", "fecha"])) return match[1];
-            if (match && hasAny(normalizedLabel, ["month", "mes"]) && !hasAny(normalizedLabel, ["date", "fecha"])) return match[2];
-            var kind = element.type === "month" ? "month" : "date";
-            return isoDate(value, kind);
+            if (match && hasAny(normalizedLabel, ["year", "ano", "año"]) && !hasAny(normalizedLabel, ["date", "fecha"])) return { value: match[1] };
+            if (match && hasAny(normalizedLabel, ["month", "mes"]) && !hasAny(normalizedLabel, ["date", "fecha"])) return { value: match[2] };
+            var kind = element.type === "month" ? "month" : "date", parts = dateParts(value);
+            if (!parts) return { value: "" };
+            if (kind === "month") return { value: isoDate(value, kind) };
+            if (parts.precision === "day") return { value: parts.source };
+            if (element.type === "date") return {
+                value: parts.year + "-" + parts.month + "-01",
+                derivedValue: parts.year + "-" + parts.month + "-01",
+                needsConfirmation: true,
+                reason: "month-precision-derived-day"
+            };
+            return { value: parts.year + "-" + parts.month };
         }
-        return value;
+        return { value: value };
     }
     function highlight(element, review) {
         if (!element.dataset.rpmJobOriginalBorder) element.dataset.rpmJobOriginalBorder = element.style.border;
@@ -540,8 +614,9 @@
         }
         return decision;
     }
-    function addDecision(output, bucket, match, label, reason, action, descriptor) {
+    function addDecision(output, bucket, match, label, reason, action, descriptor, details) {
         var decision = matchDecision(match, label, reason, action, descriptor);
+        if (details && details.derivedValue) decision.derivedValue = details.derivedValue;
         output.matches.push(decision);
         if (bucket) bucket.push(decision);
         return decision;
@@ -621,7 +696,21 @@
                     continue;
                 }
                 if ((element.type === "checkbox" || element.type === "radio") && candidate && candidate.score >= 0.72) {
-                    addDecision(output, output.review, candidate, label || "Respuesta si/no", "choice-manual-confirmation", "review");
+                    if (candidate.definition.key === "currentEmployment") {
+                        var currentValue = profileValue(profile, candidate.definition.key, descriptor.block.index, descriptor.block.kind);
+                        var currentLabel = normalize(label + " " + text(element.value));
+                        var affirmative = element.type === "checkbox" || hasAny(currentLabel, ["yes", "si", "true", "currently", "present", "actual", "aqui", "aquí"]);
+                        if (currentValue === true && affirmative && setChecked(element, true)) {
+                            highlight(element, true);
+                            addDecision(output, output.review, candidate, label || "Actualmente trabajo aquí", "current-employment-filled-confirmation", "review", descriptor);
+                        } else {
+                            addDecision(output, output.review, candidate, label || "Actualmente trabajo aquí", "current-employment-confirmation", "review", descriptor);
+                        }
+                        continue;
+                    }
+                    addDecision(output, output.review, candidate, label || "Respuesta si/no",
+                        candidate.definition.key === "currentEmployment" ? "current-employment-confirmation" : "choice-manual-confirmation",
+                        "review");
                     continue;
                 }
                 if (element.type === "checkbox" || element.type === "radio") {
@@ -660,14 +749,23 @@
                     continue;
                 }
                 if (value === "" || value == null) {
+                    if (match.definition.key === "startDateDay" || match.definition.key === "endDateDay") {
+                        addDecision(output, output.review, match, label, "day-missing-month-precision", "review", descriptor);
+                        continue;
+                    }
                     addDecision(output, output.skipped, match, label, "profile-value-missing", "skipped");
                     continue;
                 }
-                value = formatValue(element, match.definition.key, value, label);
-                if (!value) {
+                var formatted = formatValue(element, match.definition.key, value, label);
+                if (formatted && formatted.needsConfirmation) {
+                    addDecision(output, output.review, match, label, formatted.reason || "derived-date-needs-confirmation", "review", descriptor, { derivedValue: formatted.derivedValue || formatted.value });
+                    continue;
+                }
+                if (!formatted || !formatted.value) {
                     addDecision(output, output.skipped, match, label, "formatted-value-empty", "skipped");
                     continue;
                 }
+                value = formatted.value;
                 if (text(element.value).trim() && !get(profile, "OverwriteExisting")) {
                     addDecision(output, output.skipped, match, label, "existing-value", "skipped");
                     continue;

@@ -39,6 +39,21 @@ FakeInput.prototype.getBoundingClientRect = function () { return { width: 100, h
 FakeInput.prototype.dispatchEvent = function () {};
 Object.defineProperty(FakeInput.prototype, 'value', { get: function () { return this._value || ''; }, set: function (v) { this._value = String(v); } });
 
+function FakeSelect(attrs, options) {
+  this.type = 'select-one';
+  this.tagName = 'SELECT';
+  this.disabled = false;
+  this.style = {};
+  this.dataset = {};
+  this.attrs = attrs || {};
+  this.labels = [];
+  this.options = options || [];
+  this.value = '';
+}
+FakeSelect.prototype.getAttribute = FakeInput.prototype.getAttribute;
+FakeSelect.prototype.getBoundingClientRect = FakeInput.prototype.getBoundingClientRect;
+FakeSelect.prototype.dispatchEvent = function () {};
+
 const email = new FakeInput('email', { name: 'email' });
 const first = new FakeInput('text', { autocomplete: 'given-name' });
 context.HTMLInputElement = FakeInput;
@@ -134,4 +149,42 @@ assert.deepStrictEqual(
   firstGlobal.matches.map(item => [item.label, item.canonicalField, item.reason, item.blockKey]),
   secondGlobal.matches.map(item => [item.label, item.canonicalField, item.reason, item.blockKey])
 );
+
+const monthlyDate = new FakeInput('date', { name: 'Start date' });
+context.document.querySelectorAll = () => [monthlyDate];
+const monthlyDateResult = window.RpmJobApply.fill({ Experiences: [{ StartDate: '2024-03' }] });
+assert.strictEqual(monthlyDate.value, '');
+assert.ok(monthlyDateResult.review.some(item => item.reason === 'month-precision-derived-day' && item.derivedValue === '2024-03-01'));
+
+const fullDate = new FakeInput('date', { name: 'Start date' });
+context.document.querySelectorAll = () => [fullDate];
+const fullDateResult = window.RpmJobApply.fill({ Experiences: [{ StartDate: '2024-03-15' }] });
+assert.strictEqual(fullDate.value, '2024-03-15');
+assert.ok(fullDateResult.filled.some(item => item.canonicalField === 'experience.startDate'));
+
+const startDay = new FakeInput('text', { name: 'Start day' });
+const startMonth = new FakeInput('text', { name: 'Start month' });
+const startYear = new FakeInput('text', { name: 'Start year' });
+context.document.querySelectorAll = () => [startDay, startMonth, startYear];
+const splitDateResult = window.RpmJobApply.fill({ Experiences: [{ StartDate: '2024-03-15' }] });
+assert.strictEqual(startDay.value, '15');
+assert.strictEqual(startMonth.value, '03');
+assert.strictEqual(startYear.value, '2024');
+assert.ok(splitDateResult.filled.some(item => item.canonicalField === 'experience.startDate.day'));
+assert.ok(splitDateResult.filled.some(item => item.canonicalField === 'experience.startDate.month'));
+assert.ok(splitDateResult.filled.some(item => item.canonicalField === 'experience.startDate.year'));
+
+const monthSelect = new FakeSelect({ name: 'Start month' }, [
+  { text: 'January', value: '01', disabled: false },
+  { text: 'March', value: '03', disabled: false }
+]);
+context.document.querySelectorAll = () => [monthSelect];
+window.RpmJobApply.fill({ Experiences: [{ StartDate: '2024-03' }] });
+assert.strictEqual(monthSelect.value, '03');
+
+const current = new FakeInput('checkbox', { name: 'Currently working here' });
+context.document.querySelectorAll = () => [current];
+const currentResult = window.RpmJobApply.fill({ Experiences: [{ IsCurrent: true }] });
+assert.strictEqual(current.checked, true);
+assert.ok(currentResult.review.some(item => item.reason === 'current-employment-filled-confirmation'));
 console.log('job-apply-script: ok');

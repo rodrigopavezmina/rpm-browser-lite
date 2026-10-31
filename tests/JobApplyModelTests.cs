@@ -43,13 +43,24 @@ namespace ChatGPTLite
                     AvailableStartDate = "31/12/2026",
                     Experiences = new System.Collections.Generic.List<JobExperience>
                     {
-                        new JobExperience { Company = "Acme", Title = "Engineer", StartDate = "03/2024", EndDate = "12.2024" }
+                        new JobExperience { Company = "Acme", Title = "Engineer", StartDate = "03/2024", EndDate = "12.2024" },
+                        new JobExperience { Company = "US", Title = "Engineer", StartDate = "12/31/2024", EndDate = "2025-01-15" },
+                        new JobExperience { Company = "Ambiguous", Title = "Engineer", StartDate = "03/04/2024", EndDate = "" },
+                        new JobExperience { Company = "English", Title = "Engineer", StartDate = "March 2024", EndDate = "December 31, 2024" },
+                        new JobExperience { Company = "Spain", Title = "Engineer", StartDate = "marzo 2024", EndDate = "31 diciembre 2024" }
                     }
                 };
                 regional.Normalize();
                 Expect(regional.AvailableStartDate == "2026-12-31", "regional full date was not normalized");
                 Expect(regional.Experiences[0].StartDate == "2024-03", "regional month was not normalized");
                 Expect(regional.Experiences[0].EndDate == "2024-12", "dotted month was not normalized");
+                Expect(regional.Experiences[1].StartDate == "2024-12-31", "US date was not normalized");
+                Expect(regional.Experiences[1].EndDate == "2025-01-15", "ISO full date was not preserved");
+                Expect(regional.Experiences[2].StartDate == "03/04/2024", "ambiguous date was guessed");
+                Expect(regional.Experiences[3].StartDate == "2024-03", "English month precision was not preserved");
+                Expect(regional.Experiences[3].EndDate == "2024-12-31", "English full date was not normalized");
+                Expect(regional.Experiences[4].StartDate == "2024-03", "Spanish month precision was not preserved");
+                Expect(regional.Experiences[4].EndDate == "2024-12-31", "Spanish full date was not normalized");
 
                 profile.SetFieldMetadata("FirstName", new JobApplicationFieldMetadata
                 {
