@@ -166,6 +166,9 @@
         ontologyDefinition("identity.middleName", "middleName", "identity", ["middle name", "second name", "segundo nombre"]),
         ontologyDefinition("identity.lastName", "lastName", "identity", ["last name", "family name", "surname", "apellido", "apellidos"], { auto: ["family-name"] }),
         ontologyDefinition("identity.preferredName", "preferredName", "identity", ["preferred name", "display name", "nombre preferido"]),
+        // A bare "Name/Nombre" has no reliable first/last/full interpretation.
+        // Keep it visible for review instead of guessing from one input alone.
+        ontologyDefinition("identity.ambiguousName", "ambiguousName", "identity", ["name", "nombre"], { manual: true }),
         ontologyDefinition("identity.fullName", "fullName", "identity", ["full name", "complete name", "nombre completo"]),
         ontologyDefinition("contact.email", "email", "contact", ["email", "e mail", "email address", "correo", "correo electronico"], { inputType: "email", auto: ["email"] }),
         ontologyDefinition("contact.phone", "phone", "contact", ["phone", "telephone", "mobile", "cell", "phone number", "telefono", "celular", "numero telefonico"], { inputType: "tel", auto: ["tel", "tel-national"] }),
@@ -219,6 +222,47 @@
         var container = element && element.closest ? element.closest("fieldset, section, li, [data-testid], [class*='experience'], [class*='education']") : null;
         return container ? normalize(container.innerText || container.textContent) : "";
     }
+    function blockMarker(element) {
+        var container = element && element.closest ? element.closest("fieldset, section, li, [data-testid], [class*='experience'], [class*='education']") : null;
+        if (!container) return "";
+        var marker = [];
+        ["data-testid", "data-section", "class", "id"].forEach(function (attribute) {
+            if (container.getAttribute && container.getAttribute(attribute)) marker.push(container.getAttribute(attribute));
+        });
+        return normalize(marker.join(" "));
+    }
+    function classifyBlock(element) {
+        var own = [];
+        ["name", "id", "data-testid", "data-section", "class"].forEach(function (attribute) {
+            if (element && element.getAttribute && element.getAttribute(attribute)) own.push(element.getAttribute(attribute));
+        });
+        var context = contextText(element) + " " + blockMarker(element) + " " + normalize(own.join(" "));
+        if (hasAny(context, ["education", "academic", "educacion", "formacion", "estudios", "school", "university"]) &&
+            !hasAny(context, ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral"]))
+            return "education";
+        if (hasAny(context, ["experience", "employment", "work history", "experiencia", "empleo", "historial laboral", "job history"]))
+            return "experience";
+        return "root";
+    }
+    function blockInfo(element) {
+        var kind = classifyBlock(element), container = element && element.closest ? element.closest("fieldset, section, li, [data-testid], [class*='experience'], [class*='education']") : null;
+        var index = 0;
+        var identity = [];
+        ["name", "id", "data-testid", "data-section"].forEach(function (attribute) {
+            if (element && element.getAttribute && element.getAttribute(attribute)) identity.push(element.getAttribute(attribute));
+        });
+        var explicit = /(experience|employment|work|education|school|estudios|experiencia|empleo)[^0-9]{0,12}(\d+)/i.exec(identity.join(" "));
+        var hasExplicit = !!(explicit && kind !== "root");
+        if (hasExplicit) index = parseInt(explicit[2], 10) || 0;
+        if (!hasExplicit && kind !== "root" && container && container.parentElement && container.parentElement.children) {
+            var siblings = container.parentElement.children;
+            for (var i = 0; i < siblings.length; i++) {
+                if (siblings[i] === container) break;
+                if (classifyBlock(siblings[i]) === kind) index++;
+            }
+        }
+        return { kind: kind, index: index, key: kind + "#" + index };
+    }
     function signalValues(element, label) {
         return {
             label: normalize(label), name: normalize(element.getAttribute && element.getAttribute("name")),
@@ -264,14 +308,43 @@
         for (i = 0; i < definitionValue.negativeTerms.length; i++) if (hasAny(values.label, [definitionValue.negativeTerms[i]])) { conflicts.push({ canonicalField: definitionValue.canonicalField, reason: "negative-signal:" + normalize(definitionValue.negativeTerms[i]) }); base -= 0.2; }
         return { definition: definitionValue, score: Math.max(0, Math.min(1, base + Math.min(0.14, support))), signals: signals, conflicts: conflicts };
     }
+    function candidateDefinitions(element, label) {
+        var candidates = [], i, candidate;
+        for (i = 0; i < definitions.length; i++) {
+            candidate = ontologyScore(definitions[i], label, element);
+            if (candidate.score > 0) candidates.push(candidate);
+        }
+        candidates.sort(function (a, b) {
+            if (b.score !== a.score) return b.score - a.score;
+            return a.definition.canonicalField < b.definition.canonicalField ? -1 : (a.definition.canonicalField > b.definition.canonicalField ? 1 : 0);
+        });
+        var best = candidates.length ? candidates[0] : null;
+        var second = candidates.length > 1 ? candidates[1] : null;
+        if (best && second && best.score >= 0.72 && second.score >= 0.72 && (best.score - second.score) <= 0.08) {
+            best.conflicts.push({ canonicalField: second.definition.canonicalField, score: Math.round(second.score * 100) / 100, reason: "near-tie" });
+            best.ambiguous = true;
+            best.reason = "ambiguous-near-tie";
+        }
+        candidates.forEach(function (candidate) {
+            var contextConflict = candidate.conflicts.some(function (conflict) {
+                return conflict.reason === "education-context" || conflict.reason === "experience-context";
+            });
+            if (contextConflict) {
+                candidate.ambiguous = true;
+                candidate.reason = "context-conflict";
+            }
+            candidate.confidence = candidate.score;
+            candidate.globalScore = candidate.score - (candidate.ambiguous ? 0.12 : 0);
+        });
+        return candidates;
+    }
     function bestDefinition(element, label) {
-        var candidates = [], i, candidate, best, second, ambiguous;
-        for (i = 0; i < definitions.length; i++) { candidate = ontologyScore(definitions[i], label, element); if (candidate.score > 0) candidates.push(candidate); }
-        candidates.sort(function (a, b) { return b.score - a.score; });
-        best = candidates.length ? candidates[0] : null; second = candidates.length > 1 ? candidates[1] : null;
+        var candidates = candidateDefinitions(element, label), best = candidates.length ? candidates[0] : null;
+        var second = candidates.length > 1 ? candidates[1] : null;
         if (!best) return null;
-        ambiguous = best.score >= 0.72 && second && second.score >= 0.72 && (best.score - second.score) <= 0.08;
-        if (second && second.score >= 0.72 && (best.score - second.score) <= 0.12) best.conflicts.push({ canonicalField: second.definition.canonicalField, score: Math.round(second.score * 100) / 100, reason: "near-tie" });
+        var ambiguous = best.score >= 0.72 && second && second.score >= 0.72 && (best.score - second.score) <= 0.08;
+        if (second && second.score >= 0.72 && (best.score - second.score) <= 0.12)
+            best.conflicts.push({ canonicalField: second.definition.canonicalField, score: Math.round(second.score * 100) / 100, reason: "near-tie" });
         var contextConflict = best.conflicts.some(function (conflict) {
             return conflict.reason === "education-context" || conflict.reason === "experience-context";
         });
@@ -279,6 +352,113 @@
         best.confidence = best.score;
         best.reason = ambiguous ? "ambiguous-near-tie" : (contextConflict ? "context-conflict" : "best-ontology-match");
         return best;
+    }
+    function profileResourceKey(definition, block) {
+        var key = definition.key;
+        // portfolio and website both read PortfolioUrl; do not consume it twice.
+        if (key === "portfolio" || key === "website") key = "portfolioUrl";
+        var repeat = definition.category === "experience" || definition.category === "education";
+        var slot = repeat ? (block.kind + "#" + block.index) : "root";
+        return definition.category + "|" + slot + "|" + key;
+    }
+    function addGlobalConflict(match, other, reason) {
+        if (!match || !other) return;
+        match.conflicts = match.conflicts || [];
+        var canonical = other.definition ? other.definition.canonicalField : other.canonicalField;
+        var exists = match.conflicts.some(function (conflict) { return conflict.canonicalField === canonical && conflict.reason === reason; });
+        if (!exists) match.conflicts.push({ canonicalField: canonical, score: other.score == null ? 0 : Math.round(other.score * 100) / 100, reason: reason });
+    }
+    function solveGlobalComponent(component) {
+        var ordered = component.slice(0).sort(function (a, b) {
+            if (a.candidates.length !== b.candidates.length) return a.candidates.length - b.candidates.length;
+            var as = a.candidates.length ? a.candidates[0].globalScore : 0, bs = b.candidates.length ? b.candidates[0].globalScore : 0;
+            if (bs !== as) return bs - as;
+            return a.index - b.index;
+        });
+        var suffix = [], i, bestScore = -1, bestCount = -1, bestChoice = [];
+        suffix[ordered.length] = 0;
+        for (i = ordered.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1] + (ordered[i].candidates.length ? ordered[i].candidates[0].globalScore : 0);
+        var used = {}, choice = [], nodes = 0, maxNodes = 50000;
+        function better(score, count, selected) {
+            if (score > bestScore + 0.000001 || (Math.abs(score - bestScore) <= 0.000001 && count > bestCount)) {
+                bestScore = score;
+                bestCount = count;
+                bestChoice = selected.slice(0);
+            }
+        }
+        function search(position, score, count) {
+            if (++nodes > maxNodes) return;
+            if (position >= ordered.length) { better(score, count, choice); return; }
+            if (score + suffix[position] < bestScore - 0.000001) return;
+            var descriptor = ordered[position];
+            for (var k = 0; k < descriptor.candidates.length; k++) {
+                var candidate = descriptor.candidates[k], resource = candidate.resourceKey;
+                if (used[resource]) continue;
+                used[resource] = true;
+                choice[position] = candidate;
+                search(position + 1, score + candidate.globalScore, count + 1);
+                delete used[resource];
+            }
+            choice[position] = null;
+            search(position + 1, score, count);
+        }
+        search(0, 0, 0);
+        for (i = 0; i < ordered.length; i++) ordered[i].assignment = bestChoice[i] || null;
+    }
+    function solveGlobalAssignments(descriptors) {
+        var resourceToDescriptors = {}, relevant = [], components = [], visited = {}, i;
+        descriptors.forEach(function (descriptor) {
+            var pool = descriptor.globalCandidates || descriptor.candidates;
+            descriptor.globalCandidates = pool.slice(0, 8);
+            descriptor.candidates.forEach(function (candidate) { candidate.__descriptor = descriptor; });
+            descriptor.globalCandidates.forEach(function (candidate) {
+                candidate.resourceKey = profileResourceKey(candidate.definition, descriptor.block);
+                if (!resourceToDescriptors[candidate.resourceKey]) resourceToDescriptors[candidate.resourceKey] = [];
+                resourceToDescriptors[candidate.resourceKey].push(descriptor);
+            });
+            if (descriptor.globalCandidates.length) relevant.push(descriptor);
+        });
+        relevant.forEach(function (start) {
+            if (visited[start.index]) return;
+            var queue = [start], component = [];
+            visited[start.index] = true;
+            while (queue.length) {
+                var current = queue.shift();
+                component.push(current);
+                    current.globalCandidates.forEach(function (candidate) {
+                    (resourceToDescriptors[candidate.resourceKey] || []).forEach(function (descriptor) {
+                        if (!visited[descriptor.index]) { visited[descriptor.index] = true; queue.push(descriptor); }
+                    });
+                });
+            }
+            components.push(component);
+        });
+        components.forEach(solveGlobalComponent);
+        var owners = {};
+        descriptors.forEach(function (descriptor) {
+            var selected = descriptor.assignment;
+            if (!selected) return;
+            owners[selected.resourceKey] = descriptor;
+            var alternative = descriptor.globalCandidates.filter(function (candidate) {
+                return candidate !== selected && candidate.score >= selected.score - 0.08;
+            })[0];
+            if (alternative) {
+                addGlobalConflict(selected, alternative, "global-near-tie");
+                selected.ambiguous = true;
+                selected.reason = "ambiguous-near-tie";
+            }
+            selected.confidence = selected.score;
+            if (!selected.reason) selected.reason = "global-best-match";
+        });
+        descriptors.forEach(function (descriptor) {
+            if (descriptor.assignment || !descriptor.globalCandidates.length) return;
+            var candidate = descriptor.globalCandidates[0], owner = owners[candidate.resourceKey];
+            if (owner && owner.assignment) {
+                addGlobalConflict(candidate, owner.assignment, "global-resource-conflict");
+                candidate.ambiguous = true;
+                candidate.reason = "global-resource-conflict";
+            }
+        });
     }
     function optionValue(select, wanted) {
         var target = normalize(wanted), options = select.options || [], best = null, bestScore = 0;
@@ -338,22 +518,30 @@
         }
         return hasAny(textValue, ["education", "educacion", "educación"]) && !hasAny(textValue, ["experience", "employment", "experiencia", "empleo"]) ? { kind: "education", index: index } : { kind: "experience", index: index };
     }
-    function matchDecision(match, label, reason, action) {
+    function matchDecision(match, label, reason, action, descriptor) {
+        descriptor = descriptor || (match && match.__descriptor);
         var definitionValue = match && match.definition ? match.definition : null;
-        return {
+        var decision = {
             label: label || (definitionValue ? definitionValue.key : "Campo"),
             field: definitionValue ? definitionValue.key : "",
             canonicalField: definitionValue ? definitionValue.canonicalField : "",
             category: definitionValue ? definitionValue.category : "",
             score: match ? Math.round(match.score * 100) / 100 : 0,
+            globalScore: match && match.globalScore != null ? Math.round(match.globalScore * 100) / 100 : (match ? Math.round(match.score * 100) / 100 : 0),
             signals: match && match.signals ? match.signals.slice(0) : [],
             conflicts: match && match.conflicts ? match.conflicts.slice(0) : [],
             reason: reason || (match ? match.reason : "no-match"),
             action: action || "skipped"
         };
+        if (descriptor && descriptor.block) {
+            decision.blockKey = descriptor.block.key;
+            decision.blockKind = descriptor.block.kind;
+            decision.blockIndex = descriptor.block.index;
+        }
+        return decision;
     }
-    function addDecision(output, bucket, match, label, reason, action) {
-        var decision = matchDecision(match, label, reason, action);
+    function addDecision(output, bucket, match, label, reason, action, descriptor) {
+        var decision = matchDecision(match, label, reason, action, descriptor);
         output.matches.push(decision);
         if (bucket) bucket.push(decision);
         return decision;
@@ -378,44 +566,62 @@
                 scheduleDynamicRetry();
                 return output;
             }
+            var descriptors = [];
+            for (var d = 0; d < controls.length; d++) {
+                var control = controls[d], controlLabel = controlText(control);
+                var possibleCandidates = candidateDefinitions(control, controlLabel);
+                var controlType = normalize(control.type || control.tagName);
+                var assignable = visible(control) && controlType !== "password" && controlType !== "button" &&
+                    controlType !== "submit" && controlType !== "checkbox" && controlType !== "radio" && !isProtected(controlLabel);
+                descriptors.push({
+                    index: d, element: control, type: controlType,
+                    label: controlLabel, block: blockInfo(control),
+                    candidates: possibleCandidates, globalCandidates: assignable ? possibleCandidates : [], assignment: null
+                });
+            }
+            solveGlobalAssignments(descriptors);
             for (var i = 0; i < controls.length; i++) {
-                var element = controls[i], type = normalize(element.type || element.tagName);
-                var label = controlText(element);
-                var match = bestDefinition(element, label);
+                var descriptor = descriptors[i], element = descriptor.element, type = descriptor.type;
+                var label = descriptor.label, match = descriptor.assignment;
+                var candidate = match || (descriptor.candidates.length ? descriptor.candidates[0] : null);
+                if (!match && candidate && candidate.score >= 0.72) {
+                    candidate.ambiguous = true;
+                    if (!candidate.reason) candidate.reason = "global-resource-conflict";
+                }
                 if (element.type === "file") {
-                    if (match && match.score >= 0.72) {
-                        if (!visible(element)) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
-                        else if (!match.ambiguous && match.definition.key === "resume") {
+                    if (candidate && candidate.score >= 0.72) {
+                        if (!visible(element)) addDecision(output, output.skipped, candidate, label, "hidden-or-disabled", "skipped");
+                        else if (match && !match.ambiguous && match.definition.key === "resume") {
                             element.setAttribute("data-rpm-job-file", "resume");
                             resumeDetectedCount++;
                             addDecision(output, null, match, label, "resume-field-detected-manual-attachment", "detected");
                         } else {
                             if (element.removeAttribute) element.removeAttribute("data-rpm-job-file");
-                            addDecision(output, output.skipped, match, label, match.ambiguous ? match.reason : "manual-file-attachment", "skipped");
+                            addDecision(output, output.skipped, candidate, label, candidate.reason || "manual-file-attachment", "skipped");
                         }
                         continue;
                     }
                     if (!visible(element)) {
-                        if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
+                        if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "hidden-or-disabled", "skipped");
                         continue;
                     }
                     if (hasAny(label, ["resume", "cv", "curriculum", "curriculo", "currículum"])) { element.setAttribute("data-rpm-job-file", "resume"); output.resumeFieldFound = true; }
                     continue;
                 }
                 if (!visible(element)) {
-                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "hidden-or-disabled", "skipped");
+                    if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "hidden-or-disabled", "skipped");
                     continue;
                 }
                 if (element.type === "password" || type === "button" || type === "submit") {
-                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "protected-control", "skipped");
+                    if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "protected-control", "skipped");
                     continue;
                 }
                 if (isProtected(label)) {
-                    if (match && match.score >= 0.72) addDecision(output, output.skipped, match, label, "sensitive-manual-confirmation", "skipped");
+                    if (candidate && candidate.score >= 0.72) addDecision(output, output.skipped, candidate, label, "sensitive-manual-confirmation", "skipped");
                     continue;
                 }
-                if ((element.type === "checkbox" || element.type === "radio") && match && match.score >= 0.72) {
-                    addDecision(output, output.review, match, label || "Respuesta si/no", "choice-manual-confirmation", "review");
+                if ((element.type === "checkbox" || element.type === "radio") && candidate && candidate.score >= 0.72) {
+                    addDecision(output, output.review, candidate, label || "Respuesta si/no", "choice-manual-confirmation", "review");
                     continue;
                 }
                 if (element.type === "checkbox" || element.type === "radio") {
@@ -424,7 +630,7 @@
                     continue;
                 }
                 if (!match || match.score < 0.72) {
-                    if (match) addDecision(output, output.skipped, match, label, "below-confidence-threshold", "skipped");
+                    if (candidate) addDecision(output, output.skipped, candidate, label, candidate.reason || "below-confidence-threshold", "skipped");
                     continue;
                 }
                 if (match.ambiguous) {
@@ -435,12 +641,15 @@
                     addDecision(output, output.skipped, match, label, "sensitive-manual-confirmation", "skipped");
                     continue;
                 }
-                var section = sectionIndex(element, match.definition.key), index = section.index;
+                var section = descriptor.block, index = section.index;
                 var kind = match.definition.context === "education" ? "education" : (match.definition.context === "experience" ? "experience" : section.kind);
                 var value = profileValue(profile, match.definition.key, index, kind);
                 if (match.definition.category === "experience") {
                     var experiences = get(profile, "Experiences") || [];
-                    if (!experiences[index]) value = profileValue(profile, match.definition.key, null, kind);
+                    // A scalar current title may seed the first empty block, but
+                    // never gets duplicated across repeated employment blocks.
+                    if (!experiences[index] && experiences.length === 0 && index === 0)
+                        value = profileValue(profile, match.definition.key, null, kind);
                 }
                 if (match.definition.category === "education") {
                     var education = get(profile, "Education") || [];

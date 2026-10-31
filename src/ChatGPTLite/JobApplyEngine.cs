@@ -477,9 +477,13 @@ namespace ChatGPTLite
                 match.Field = ReadDescriptorString(descriptor, "field");
                 match.CanonicalField = ReadDescriptorString(descriptor, "canonicalField");
                 match.Category = ReadDescriptorString(descriptor, "category");
+                match.BlockKey = ReadDescriptorString(descriptor, "blockKey");
+                match.BlockKind = ReadDescriptorString(descriptor, "blockKind");
+                match.BlockIndex = ReadDescriptorInt(descriptor, "blockIndex");
                 match.Reason = ReadDescriptorString(descriptor, "reason");
                 match.Action = ReadDescriptorString(descriptor, "action");
                 match.Score = ReadDescriptorDouble(descriptor, "score");
+                match.GlobalScore = ReadDescriptorDouble(descriptor, "globalScore");
                 match.Signals = ReadStringValues(descriptor, "signals");
                 match.Conflicts = ReadConflictValues(descriptor, "conflicts");
                 yield return match;
@@ -499,6 +503,14 @@ namespace ChatGPTLite
             object value;
             if (!descriptor.TryGetValue(key, out value) || value == null) return 0;
             try { return Convert.ToDouble(value, CultureInfo.InvariantCulture); }
+            catch { return 0; }
+        }
+
+        private static int ReadDescriptorInt(Dictionary<string, object> descriptor, string key)
+        {
+            object value;
+            if (!descriptor.TryGetValue(key, out value) || value == null) return 0;
+            try { return Convert.ToInt32(value, CultureInfo.InvariantCulture); }
             catch { return 0; }
         }
 
@@ -550,7 +562,11 @@ namespace ChatGPTLite
         public string Field { get; set; }
         public string CanonicalField { get; set; }
         public string Category { get; set; }
+        public string BlockKey { get; set; }
+        public string BlockKind { get; set; }
+        public int BlockIndex { get; set; }
         public double Score { get; set; }
+        public double GlobalScore { get; set; }
         public List<string> Signals { get; set; }
         public List<JobApplyConflict> Conflicts { get; set; }
         public string Reason { get; set; }

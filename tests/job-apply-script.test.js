@@ -57,4 +57,81 @@ assert.ok(ambiguous.skipped.some(item => item.reason === 'ambiguous-near-tie'));
 assert.ok(ambiguous.matches.some(item =>
   (item.canonicalField === 'links.website' || item.canonicalField === 'links.portfolio') &&
   item.conflicts.some(conflict => conflict.canonicalField === 'links.website' || conflict.canonicalField === 'links.portfolio')));
+
+function groupedBlock(kind, textValue) {
+  const block = {
+    innerText: textValue,
+    textContent: textValue,
+    attrs: { class: `${kind}-block` },
+    parentElement: null,
+    getAttribute: function (name) { return this.attrs[name] || null; },
+    closest: function () { return this; },
+    querySelector: function () { return null; }
+  };
+  return block;
+}
+
+function groupedInput(label, block) {
+  const input = new FakeInput('text', { name: label });
+  input.parentElement = block;
+  input.closest = function () { return block; };
+  return input;
+}
+
+const experienceOne = groupedBlock('experience', 'Work experience');
+const experienceTwo = groupedBlock('experience', 'Work experience');
+const educationOne = groupedBlock('education', 'Education');
+const experienceList = { children: [experienceOne, experienceTwo], parentElement: null };
+const educationList = { children: [educationOne], parentElement: null };
+experienceOne.parentElement = experienceList;
+experienceTwo.parentElement = experienceList;
+educationOne.parentElement = educationList;
+const groupedCompanyOne = groupedInput('Company', experienceOne);
+const groupedCompanyTwo = groupedInput('Company', experienceTwo);
+const groupedWrongCompany = groupedInput('Company', educationOne);
+const groupedSchool = groupedInput('Institution', educationOne);
+const groupedFirstName = new FakeInput('text', { name: 'First name' });
+const groupedLastName = new FakeInput('text', { name: 'Last name' });
+const groupedFullName = new FakeInput('text', { name: 'Full name' });
+context.document.querySelectorAll = () => [groupedCompanyOne, groupedCompanyTwo, groupedWrongCompany, groupedSchool, groupedFirstName, groupedLastName, groupedFullName];
+const grouped = window.RpmJobApply.fill({
+  FirstName: 'Ana', LastName: 'Pérez', Experiences: [
+    { Company: 'Acme' }, { Company: 'Globex' }
+  ], Education: [{ Institution: 'Universidad de Chile' }]
+});
+assert.strictEqual(groupedCompanyOne.value, 'Acme');
+assert.strictEqual(groupedCompanyTwo.value, 'Globex');
+assert.strictEqual(groupedWrongCompany.value, '');
+assert.strictEqual(groupedSchool.value, 'Universidad de Chile');
+assert.strictEqual(groupedFirstName.value, 'Ana');
+assert.strictEqual(groupedLastName.value, 'Pérez');
+assert.strictEqual(groupedFullName.value, 'Ana Pérez');
+assert.ok(grouped.matches.some(item => item.label === 'Full name' && item.canonicalField === 'identity.fullName'));
+assert.ok(grouped.skipped.some(item => item.label === 'Company' && item.blockKind === 'education' && item.reason === 'context-conflict'));
+assert.strictEqual(grouped.matches.filter(item => item.canonicalField === 'experience.company' && item.blockKind === 'experience').length, 2);
+assert.strictEqual(JSON.stringify(grouped.matches.filter(item => item.canonicalField === 'experience.company' && item.blockKind === 'experience').map(item => item.blockIndex)), JSON.stringify([0, 1]));
+
+const genericName = new FakeInput('text', { name: 'Name' });
+context.document.querySelectorAll = () => [genericName];
+const genericNameResult = window.RpmJobApply.fill({ FirstName: 'Ana', LastName: 'Pérez' });
+assert.strictEqual(genericName.value, '');
+assert.ok(genericNameResult.review.some(item => item.canonicalField === 'identity.ambiguousName' && item.reason === 'manual-review-required'));
+
+const repeatedPortfolioA = new FakeInput('text', { name: 'Website' });
+const repeatedPortfolioB = new FakeInput('text', { name: 'Personal website' });
+context.document.querySelectorAll = () => [repeatedPortfolioA, repeatedPortfolioB];
+const firstGlobal = window.RpmJobApply.fill({ PortfolioUrl: 'https://portfolio.example' });
+const repeatedPortfolioA2 = new FakeInput('text', { name: 'Website' });
+const repeatedPortfolioB2 = new FakeInput('text', { name: 'Personal website' });
+context.document.querySelectorAll = () => [repeatedPortfolioA2, repeatedPortfolioB2];
+const secondGlobal = window.RpmJobApply.fill({ PortfolioUrl: 'https://portfolio.example' });
+assert.strictEqual(repeatedPortfolioA.value, '');
+assert.strictEqual(repeatedPortfolioB.value, 'https://portfolio.example');
+assert.strictEqual(repeatedPortfolioA2.value, '');
+assert.strictEqual(repeatedPortfolioB2.value, 'https://portfolio.example');
+assert.ok(firstGlobal.skipped.some(item => item.label === 'Website' && (item.reason === 'ambiguous-near-tie' || item.reason === 'global-resource-conflict')));
+assert.deepStrictEqual(
+  firstGlobal.matches.map(item => [item.label, item.canonicalField, item.reason, item.blockKey]),
+  secondGlobal.matches.map(item => [item.label, item.canonicalField, item.reason, item.blockKey])
+);
 console.log('job-apply-script: ok');

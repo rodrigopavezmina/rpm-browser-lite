@@ -83,6 +83,14 @@ assert.ok(first.skipped.some(item => item.canonicalField === 'sensitive.ethnicit
 assert.ok(first.matches.every(item => item.canonicalField && typeof item.score === 'number' && Array.isArray(item.signals) && Array.isArray(item.conflicts) && item.reason));
 assert.strictEqual(first.filled.length, 2);
 
+const hiddenEmail = new FakeInput('email', { name: 'Email' }, false);
+const visibleEmail = new FakeInput('email', { name: 'Email' });
+context.document.querySelectorAll = () => [hiddenEmail, visibleEmail];
+const visibilityGlobal = window.RpmJobApply.fill({ Email: 'ana@example.com' });
+assert.strictEqual(hiddenEmail.value, '');
+assert.strictEqual(visibleEmail.value, 'ana@example.com');
+assert.ok(visibilityGlobal.filled.some(item => item.label === 'Email'));
+
 const second = window.RpmJobApply.fill(profile);
 assert.strictEqual(second.filled.length, 0);
 assert.ok(second.skipped.length >= 2);
@@ -90,6 +98,10 @@ assert.match(source, /MAX_DYNAMIC_RETRIES/);
 assert.match(source, /scheduleDynamicRetry/);
 assert.match(source, /function cancel\(\)/);
 assert.match(source, /observer\.disconnect/);
+assert.match(source, /solveGlobalAssignments/);
+assert.match(source, /profileResourceKey/);
+assert.match(source, /global-resource-conflict/);
+assert.match(source, /blockInfo/);
 assert.doesNotMatch(source, /\.submit\s*\(/);
 assert.doesNotMatch(source, /\.click\s*\(/);
 
@@ -101,6 +113,8 @@ assert.match(engine, /CancelAsync/);
 assert.match(engine, /fileCount/);
 assert.match(engine, /List<JobApplyMatch> Matches/);
 assert.match(engine, /CanonicalField/);
+assert.match(engine, /BlockKey/);
+assert.match(engine, /GlobalScore/);
 
 const browser = fs.readFileSync(path.join(__dirname, '..', 'src', 'ChatGPTLite', 'BrowserWindow.cs'), 'utf8');
 assert.match(browser, /_jobApplyPreparedPages\.Clear\(\)/);
