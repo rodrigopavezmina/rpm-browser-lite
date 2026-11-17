@@ -266,13 +266,13 @@ namespace ChatGPTLite
             bookmarkActions.Padding = new Padding(7, 7, 7, 5);
             Button addBookmarkButton = CreateButton("★ Bookmark selected window");
             Button openBookmarkButton = CreateButton("↗ Open bookmark");
-            Button importChromeDefaultButton = CreateButton("↓ Import Chrome Default");
+            Button importChromeDefaultButton = CreateButton("↓ Import browser profile");
             Button importBookmarksButton = CreateButton("↓ Import Chrome file");
             Button exportBookmarksButton = CreateButton("↑ Export HTML");
             Button removeBookmarkButton = CreateButton("× Remove");
             addBookmarkButton.Click += delegate { AddSelectedWindowBookmark(); };
             openBookmarkButton.Click += delegate { OpenSelectedBookmark(); };
-            importChromeDefaultButton.Click += delegate { ImportChromeDefaultBookmarks(); };
+            importChromeDefaultButton.Click += delegate { ImportBrowserBookmarks(); };
             importBookmarksButton.Click += delegate { ImportBookmarks(); };
             exportBookmarksButton.Click += delegate { ExportBookmarks(); };
             removeBookmarkButton.Click += delegate { RemoveSelectedBookmarks(); };
@@ -945,6 +945,117 @@ namespace ChatGPTLite
                 {
                     MessageBox.Show("The bookmark file could not be imported.\r\n\r\n" + ex.Message, AppController.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
+            }
+            RefreshContent();
+        }
+
+        private void ImportBrowserBookmarks()
+        {
+            IList<BrowserBookmarkSource> sources = _app.DiscoverBookmarkSources();
+            if (sources.Count == 0)
+            {
+                MessageBox.Show(
+                    "No Chromium bookmark profiles were found automatically. Use 'Import Chrome file' and select the Bookmarks file manually.",
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            BrowserBookmarkSource selected = sources[0];
+            if (sources.Count > 1)
+            {
+                using (Form chooser = new Form())
+                {
+                    chooser.Text = "Import browser bookmarks";
+                    chooser.StartPosition = FormStartPosition.CenterParent;
+                    chooser.MinimizeBox = false;
+                    chooser.MaximizeBox = false;
+                    chooser.ShowInTaskbar = false;
+                    chooser.Size = new Size(560, 360);
+                    chooser.Padding = new Padding(12);
+
+                    Label description = new Label();
+                    description.Dock = DockStyle.Top;
+                    description.Height = 42;
+                    description.Text = "Choose a local browser profile. The original Chrome/Cent order and folders will be preserved.";
+
+                    ListBox list = new ListBox();
+                    list.Dock = DockStyle.Fill;
+                    list.HorizontalScrollbar = true;
+                    list.IntegralHeight = false;
+                    foreach (BrowserBookmarkSource source in sources)
+                        list.Items.Add(source);
+                    int preferredIndex = 0;
+                    string savedPath = _app.State.Settings.BookmarkSourcePath;
+                    for (int index = 0; index < sources.Count; index++)
+                    {
+                        if (sources[index].Recommended ||
+                            (!string.IsNullOrWhiteSpace(savedPath) &&
+                             string.Equals(sources[index].Path, savedPath, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            preferredIndex = index;
+                            break;
+                        }
+                    }
+                    list.SelectedIndex = preferredIndex;
+
+                    Label pathLabel = new Label();
+                    pathLabel.Dock = DockStyle.Bottom;
+                    pathLabel.Height = 36;
+                    pathLabel.AutoEllipsis = true;
+                    pathLabel.TextAlign = ContentAlignment.MiddleLeft;
+                    list.SelectedIndexChanged += delegate
+                    {
+                        BrowserBookmarkSource source = list.SelectedItem as BrowserBookmarkSource;
+                        pathLabel.Text = source == null ? string.Empty : source.Path;
+                    };
+                    pathLabel.Text = sources[preferredIndex].Path;
+
+                    FlowLayoutPanel buttons = new FlowLayoutPanel();
+                    buttons.Dock = DockStyle.Bottom;
+                    buttons.Height = 38;
+                    buttons.FlowDirection = FlowDirection.RightToLeft;
+                    buttons.WrapContents = false;
+                    Button cancel = new Button();
+                    cancel.Text = "Cancel";
+                    cancel.DialogResult = DialogResult.Cancel;
+                    Button import = new Button();
+                    import.Text = "Import";
+                    import.DialogResult = DialogResult.OK;
+                    import.Enabled = list.SelectedIndex >= 0;
+                    buttons.Controls.Add(cancel);
+                    buttons.Controls.Add(import);
+                    chooser.AcceptButton = import;
+                    chooser.CancelButton = cancel;
+                    chooser.Controls.Add(list);
+                    chooser.Controls.Add(pathLabel);
+                    chooser.Controls.Add(buttons);
+                    chooser.Controls.Add(description);
+                    if (chooser.ShowDialog(this) != DialogResult.OK)
+                        return;
+                    selected = list.SelectedItem as BrowserBookmarkSource;
+                }
+            }
+
+            if (selected == null)
+                return;
+            try
+            {
+                int added = _app.ImportBrowserBookmarks(selected);
+                MessageBox.Show(
+                    added + " new bookmark(s) imported from " + selected.ToString() + ".",
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "The browser bookmarks could not be imported.\r\n\r\n" + ex.Message,
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
             RefreshContent();
         }

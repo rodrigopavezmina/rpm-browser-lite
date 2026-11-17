@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.40",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.40/RPM-Browser-Lite-Setup-2.8.40-x64.exe",
-    "notes":  "La búsqueda incluye carpetas, conserva el orden de Chrome y sincroniza el orden importado sin abrir ventanas web.",
-    "sha256":  "6834d366d99ee55e1deae89cf6118dfc6f46991d271f730293481502001eac00"
+    "version":  "2.8.41",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Setup-2.8.41-x64.exe",
+    "notes":  "Detecta perfiles locales de Cent Browser y otros navegadores Chromium, conserva carpetas y orden sin pedir credenciales.",
+    "sha256":  "1cb80945314e3f7cf2e6037e89284fbf50308841ccdba199563c87e18eef22f5"
 }

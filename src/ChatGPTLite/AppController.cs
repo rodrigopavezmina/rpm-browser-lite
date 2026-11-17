@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.40";
+        public const string ProductVersion = "2.8.41";
         public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
         private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
@@ -1167,6 +1167,174 @@ namespace ChatGPTLite
         {
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             return Path.Combine(localAppData, "Google", "Chrome", "User Data", "Default", "Bookmarks");
+        }
+
+        public IList<BrowserBookmarkSource> DiscoverBookmarkSources()
+        {
+            List<BrowserBookmarkSource> sources = new List<BrowserBookmarkSource>();
+            HashSet<string> seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roamingAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            // Cent Browser is Chromium-compatible and is the preferred source on
+            // this machine when its local profile exists. Reading this file never
+            // opens the browser and never touches Google credentials.
+            AddChromiumBookmarkRoot(sources, seenPaths, "Cent Browser",
+                Path.Combine(localAppData, "CentBrowser", "User Data"), true);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Google Chrome",
+                Path.Combine(localAppData, "Google", "Chrome", "User Data"), false);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Microsoft Edge",
+                Path.Combine(localAppData, "Microsoft", "Edge", "User Data"), false);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Brave",
+                Path.Combine(localAppData, "BraveSoftware", "Brave-Browser", "User Data"), false);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Vivaldi",
+                Path.Combine(localAppData, "Vivaldi", "User Data"), false);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Chromium",
+                Path.Combine(localAppData, "Chromium", "User Data"), false);
+            AddChromiumBookmarkRoot(sources, seenPaths, "Opera",
+                Path.Combine(roamingAppData, "Opera Software", "Opera Stable"), false);
+
+            return sources
+                .OrderBy(delegate(BrowserBookmarkSource source) { return BrowserSourceOrder(source.BrowserName); })
+                .ThenByDescending(delegate(BrowserBookmarkSource source) { return source.Recommended; })
+                .ThenBy(delegate(BrowserBookmarkSource source) { return source.ProfileName ?? string.Empty; })
+                .ToList();
+        }
+
+        public int ImportBrowserBookmarks(BrowserBookmarkSource source)
+        {
+            if (source == null || string.IsNullOrWhiteSpace(source.Path))
+                throw new InvalidOperationException("Choose a browser profile first.");
+            if (!File.Exists(source.Path))
+                throw new FileNotFoundException("The selected browser bookmark file no longer exists.", source.Path);
+
+            int added = ImportBookmarks(source.Path);
+            State.Settings.BookmarkSourcePath = source.Path;
+            State.Settings.BookmarkSourceLabel = source.ToString();
+            QueueSave();
+            return added;
+        }
+
+        private static int BrowserSourceOrder(string browserName)
+        {
+            if (string.Equals(browserName, "Cent Browser", StringComparison.OrdinalIgnoreCase))
+                return 0;
+            if (string.Equals(browserName, "Google Chrome", StringComparison.OrdinalIgnoreCase))
+                return 1;
+            if (string.Equals(browserName, "Microsoft Edge", StringComparison.OrdinalIgnoreCase))
+                return 2;
+            if (string.Equals(browserName, "Brave", StringComparison.OrdinalIgnoreCase))
+                return 3;
+            if (string.Equals(browserName, "Vivaldi", StringComparison.OrdinalIgnoreCase))
+                return 4;
+            if (string.Equals(browserName, "Opera", StringComparison.OrdinalIgnoreCase))
+                return 5;
+            return 10;
+        }
+
+        private static void AddChromiumBookmarkRoot(
+            IList<BrowserBookmarkSource> sources,
+            ISet<string> seenPaths,
+            string browserName,
+            string userDataRoot,
+            bool preferredBrowser)
+        {
+            if (sources == null || seenPaths == null || string.IsNullOrWhiteSpace(userDataRoot) ||
+                !Directory.Exists(userDataRoot))
+                return;
+
+            Dictionary<string, string> profileNames = ReadChromiumProfileNames(userDataRoot);
+            try
+            {
+                string directBookmarks = Path.Combine(userDataRoot, "Bookmarks");
+                if (File.Exists(directBookmarks))
+                    AddBookmarkSource(sources, seenPaths, browserName, "Default", userDataRoot,
+                        directBookmarks, preferredBrowser);
+
+                foreach (DirectoryInfo directory in new DirectoryInfo(userDataRoot).GetDirectories())
+                {
+                    string bookmarks = Path.Combine(directory.FullName, "Bookmarks");
+                    if (!File.Exists(bookmarks))
+                        continue;
+                    string profileName;
+                    if (!profileNames.TryGetValue(directory.Name, out profileName) ||
+                        string.IsNullOrWhiteSpace(profileName))
+                        profileName = directory.Name;
+                    bool recommended = preferredBrowser &&
+                        string.Equals(directory.Name, "Default", StringComparison.OrdinalIgnoreCase);
+                    AddBookmarkSource(sources, seenPaths, browserName, profileName,
+                        directory.FullName, bookmarks, recommended);
+                }
+            }
+            catch (Exception ex)
+            {
+                // A missing or locked profile must not prevent the manager from
+                // starting; the manual file picker remains available.
+                System.Diagnostics.Debug.WriteLine("Bookmark profile discovery failed: " + ex.Message);
+            }
+        }
+
+        private static void AddBookmarkSource(
+            IList<BrowserBookmarkSource> sources,
+            ISet<string> seenPaths,
+            string browserName,
+            string profileName,
+            string profileDirectory,
+            string bookmarksPath,
+            bool recommended)
+        {
+            string fullPath;
+            try { fullPath = Path.GetFullPath(bookmarksPath); }
+            catch { return; }
+            if (!seenPaths.Add(fullPath))
+                return;
+            BrowserBookmarkSource source = new BrowserBookmarkSource();
+            source.BrowserName = browserName;
+            source.ProfileName = profileName;
+            source.ProfileDirectory = profileDirectory;
+            source.Path = fullPath;
+            source.Recommended = recommended;
+            sources.Add(source);
+        }
+
+        private static Dictionary<string, string> ReadChromiumProfileNames(string userDataRoot)
+        {
+            Dictionary<string, string> names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string localState = Path.Combine(userDataRoot, "Local State");
+            if (!File.Exists(localState))
+                return names;
+            try
+            {
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                IDictionary root = serializer.DeserializeObject(File.ReadAllText(localState, Encoding.UTF8)) as IDictionary;
+                if (root == null)
+                    return names;
+                object profileObject;
+                if (!root.Contains("profile") || (profileObject = root["profile"]) == null)
+                    return names;
+                IDictionary profile = profileObject as IDictionary;
+                if (profile == null || !profile.Contains("info_cache") || profile["info_cache"] == null)
+                    return names;
+                IDictionary infoCache = profile["info_cache"] as IDictionary;
+                if (infoCache == null)
+                    return names;
+                foreach (DictionaryEntry entry in infoCache)
+                {
+                    string directory = entry.Key == null ? string.Empty : entry.Key.ToString();
+                    IDictionary info = entry.Value as IDictionary;
+                    if (string.IsNullOrWhiteSpace(directory) || info == null)
+                        continue;
+                    object displayName = info.Contains("name") ? info["name"] : null;
+                    string name = displayName == null ? string.Empty : Convert.ToString(displayName).Trim();
+                    if (!string.IsNullOrWhiteSpace(name))
+                        names[directory] = name;
+                }
+            }
+            catch
+            {
+            }
+            return names;
         }
 
         public int ImportChromeDefaultBookmarks()

@@ -182,6 +182,14 @@ namespace ChatGPTLite
         [DataMember(Order = 20)]
         public int ChromeDefaultBookmarksOrderVersion { get; set; }
 
+        // Last local Chromium profile selected for bookmark import.  This is only
+        // a file path; no account token, password or sync credential is stored.
+        [DataMember(Order = 21)]
+        public string BookmarkSourcePath { get; set; }
+
+        [DataMember(Order = 22)]
+        public string BookmarkSourceLabel { get; set; }
+
         public static AppSettings CreateDefault()
         {
             AppSettings settings = new AppSettings();
@@ -446,6 +454,22 @@ namespace ChatGPTLite
 
         [DataMember(Order = 4)]
         public string FolderPath { get; set; }
+    }
+
+    internal sealed class BrowserBookmarkSource
+    {
+        public string BrowserName { get; set; }
+        public string ProfileName { get; set; }
+        public string ProfileDirectory { get; set; }
+        public string Path { get; set; }
+        public bool Recommended { get; set; }
+
+        public override string ToString()
+        {
+            string browser = string.IsNullOrWhiteSpace(BrowserName) ? "Chromium" : BrowserName;
+            string profile = string.IsNullOrWhiteSpace(ProfileName) ? "Default" : ProfileName;
+            return browser + " · " + profile;
+        }
     }
 
     [DataContract]

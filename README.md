@@ -4,9 +4,9 @@ Navegador ligero para Windows pensado para mantener muchas páginas, cuentas y p
 
 ## Descargar
 
-- [Instalador Windows x64 2.8.40](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.40/RPM-Browser-Lite-Setup-2.8.40-x64.exe)
-- [Versión portable x64 2.8.40](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.40/RPM-Browser-Lite-Portable-2.8.40-x64.zip)
-- [Notas de la versión 2.8.40](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.40)
+- [Instalador Windows x64 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Setup-2.8.41-x64.exe)
+- [Versión portable x64 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Portable-2.8.41-x64.zip)
+- [Notas de la versión 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.41)
 
 El instalador crea un acceso directo en el Escritorio y en el menú Inicio. Las actualizaciones verifican SHA-256, esperan el cierre de la versión anterior, escriben los archivos de forma atómica y abren el administrador al terminar.
 
@@ -20,6 +20,7 @@ El instalador crea un acceso directo en el Escritorio y en el menú Inicio. Las 
 - **Hibernated** libera el WebView2 y conserva estado, historial y una vista previa local.
 - Las sesiones y cookies se conservan en el perfil local de WebView2; la aplicación no solicita ni registra contraseñas ni claves API.
 - Las ventanas admiten ID, título, emoji, color, notas RTF, marcadores, captura de página y búsqueda rápida.
+- En Windows and recent → Bookmarks, **Import browser profile** detecta perfiles locales de Cent Browser, Chrome, Edge, Brave, Vivaldi, Chromium y Opera; conserva carpetas y orden, sin pedir credenciales ni conectarse a Google.
 - El botón 🔗 permite arrastrar la página al Escritorio para crear un acceso directo `.url` con su título y URL; también funciona con barras de favoritos.
 - Desde Options → Edge extensions se pueden cargar carpetas locales desempaquetadas de Microsoft Edge/Chromium que contengan `manifest.json`; los cambios se aplican al reiniciar.
 
@@ -37,7 +38,7 @@ La compilación usa el compilador de .NET Framework y descarga automáticamente 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\build.ps1 -ArtifactLabel 2.8.40 -BuildFolder build-2.8.40
+.\build.ps1 -ArtifactLabel 2.8.41 -BuildFolder build-2.8.41
 ```
 
 Los archivos generados quedan en `artifacts\` (instalador, portable y `SHA256SUMS`). Las carpetas `build-*`, `artifacts`, `.packages`, `bin` y `obj` están excluidas del repositorio para no subir binarios temporales ni dependencias descargadas.
