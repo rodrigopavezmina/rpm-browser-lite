@@ -905,10 +905,6 @@ namespace ChatGPTLite
 
         public void ShowLibrary()
         {
-            // Do not parse a large Chrome profile during process startup. The
-            // first time the manager is opened, show the UI first and then
-            // import the Default profile in the UI context.
-            bool importChromeDefault = !State.Settings.ChromeDefaultBookmarksImported;
             if (_library == null || _library.IsDisposed)
             {
                 _library = new LibraryForm(this);
@@ -920,13 +916,6 @@ namespace ChatGPTLite
                 _library.WindowState = FormWindowState.Normal;
             _library.Activate();
             _library.FocusSearch();
-            if (importChromeDefault)
-                _dispatcher.BeginInvoke((MethodInvoker)delegate
-                {
-                    TryImportChromeDefaultBookmarks();
-                    if (_library != null && !_library.IsDisposed)
-                        _library.RefreshContent();
-                });
         }
 
         public void ShowSettings()

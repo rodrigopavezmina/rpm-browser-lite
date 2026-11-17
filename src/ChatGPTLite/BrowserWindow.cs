@@ -1257,6 +1257,17 @@ namespace ChatGPTLite
 
         public void ToggleBookmarks()
         {
+            if (!Record.BookmarksVisible && !_app.State.Settings.ChromeDefaultBookmarksImported)
+            {
+                try
+                {
+                    _app.ImportChromeDefaultBookmarks();
+                }
+                catch (Exception ex)
+                {
+                    _app.Log("No se pudieron importar los bookmarks de Chrome Default", ex);
+                }
+            }
             SetBookmarksVisible(!Record.BookmarksVisible);
         }
 
