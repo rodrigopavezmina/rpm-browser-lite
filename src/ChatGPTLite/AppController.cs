@@ -101,12 +101,6 @@ namespace ChatGPTLite
                     _library.RefreshContent();
             };
 
-            // Chrome stores the signed-in user's local bookmark tree in the
-            // Default profile. Import it once after the manager is ready; the
-            // explicit action in the Bookmarks tab can be used to refresh it.
-            if (!State.Settings.ChromeDefaultBookmarksImported)
-                _dispatcher.BeginInvoke((MethodInvoker)delegate { TryImportChromeDefaultBookmarks(); });
-
             ContextMenuStrip trayMenu = new ContextMenuStrip();
             trayMenu.Font = new Font("Segoe UI", 11f);
             trayMenu.ImageScalingSize = new Size(24, 24);
@@ -911,6 +905,10 @@ namespace ChatGPTLite
 
         public void ShowLibrary()
         {
+            // Do not parse a large Chrome profile during process startup. The
+            // first time the manager is opened, show the UI first and then
+            // import the Default profile in the UI context.
+            bool importChromeDefault = !State.Settings.ChromeDefaultBookmarksImported;
             if (_library == null || _library.IsDisposed)
             {
                 _library = new LibraryForm(this);
@@ -922,6 +920,13 @@ namespace ChatGPTLite
                 _library.WindowState = FormWindowState.Normal;
             _library.Activate();
             _library.FocusSearch();
+            if (importChromeDefault)
+                _dispatcher.BeginInvoke((MethodInvoker)delegate
+                {
+                    TryImportChromeDefaultBookmarks();
+                    if (_library != null && !_library.IsDisposed)
+                        _library.RefreshContent();
+                });
         }
 
         public void ShowSettings()
