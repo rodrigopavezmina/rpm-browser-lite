@@ -87,12 +87,23 @@ namespace ChatGPTLite
         private static readonly SemaphoreSlim StartFaviconDownloadSlots = new SemaphoreSlim(2, 2);
         private static readonly Color[] QuickColors = new Color[]
         {
+            // Basic colors: red through purple, plus useful accent tones.
             Color.FromArgb(220, 56, 67), Color.FromArgb(239, 119, 44), Color.FromArgb(245, 181, 42),
             Color.FromArgb(182, 201, 48), Color.FromArgb(74, 171, 94), Color.FromArgb(34, 177, 154),
-            Color.FromArgb(38, 160, 210), Color.FromArgb(62, 112, 201), Color.FromArgb(104, 84, 194),
+            Color.FromArgb(38, 160, 210), Color.FromArgb(62, 112, 201), Color.FromArgb(76, 84, 194),
             Color.FromArgb(163, 76, 184), Color.FromArgb(222, 72, 142), Color.FromArgb(189, 91, 55),
-            Color.FromArgb(95, 115, 133), Color.FromArgb(65, 80, 96), Color.FromArgb(36, 36, 42),
-            Color.FromArgb(116, 84, 56), Color.FromArgb(35, 136, 126), Color.FromArgb(75, 115, 184)
+            // Pastels: readable on light themes without losing the hue.
+            Color.FromArgb(248, 154, 160), Color.FromArgb(250, 185, 142), Color.FromArgb(250, 220, 132),
+            Color.FromArgb(215, 228, 143), Color.FromArgb(157, 215, 166), Color.FromArgb(135, 218, 202),
+            Color.FromArgb(139, 207, 235), Color.FromArgb(148, 174, 231), Color.FromArgb(166, 164, 231),
+            Color.FromArgb(207, 158, 218), Color.FromArgb(239, 157, 194), Color.FromArgb(221, 171, 143),
+            // Muted and dark variants: designed to keep contrast in dark mode.
+            Color.FromArgb(160, 48, 58), Color.FromArgb(177, 83, 38), Color.FromArgb(179, 133, 31),
+            Color.FromArgb(128, 145, 38), Color.FromArgb(43, 117, 62), Color.FromArgb(26, 119, 105),
+            Color.FromArgb(25, 112, 151), Color.FromArgb(38, 76, 142), Color.FromArgb(57, 58, 135),
+            Color.FromArgb(112, 51, 128), Color.FromArgb(158, 51, 101), Color.FromArgb(126, 64, 42),
+            Color.FromArgb(104, 113, 121), Color.FromArgb(77, 88, 101), Color.FromArgb(49, 53, 61),
+            Color.FromArgb(106, 91, 73), Color.FromArgb(57, 106, 101), Color.FromArgb(76, 96, 125)
         };
         private WebView2 _webView;
         private Task _initializationTask;
@@ -243,28 +254,30 @@ namespace ChatGPTLite
             _addressGoButton.Font = new Font("Segoe UI Symbol", 11f);
             _addressGoButton.AccessibleName = "Go to the typed address";
 
-            AddToolbarAction(_appearanceButton, "✦ Title, ID and icon");
+            // Keep the high-frequency actions at the beginning of the toolbar.
+            AddToolbarAction(_cloneButton, "⧈ Clone this window");
             AddToolbarAction(newButton, "✚ New window");
+            AddToolbarAction(_bookmarksButton, "★ Chrome bookmarks");
+            AddToolbarTripleSeparator();
             AddToolbarAction(_backButton, "‹ Back");
             AddToolbarAction(_forwardButton, "› Forward");
             AddToolbarAction(_reloadButton, "↻ Reload");
-            AddToolbarAction(_downloadsButton, "⇩ Downloads (Ctrl+J)");
-            AddToolbarAction(_copyModeButton, "⧉ Copy mode: enable text selection");
-            AddToolbarAction(_notesButton, "✎ Show or hide notes");
             AddToolbarAction(_caffeineButton, "☕ Keep this window awake");
             AddToolbarAction(_sleepButton, "☾ Hibernate this window");
-            AddToolbarAction(settingsButton, "⚙ Options");
-            AddToolbarSeparator();
-            AddToolbarAction(_cloneButton, "⧈ Clone this window");
-            AddToolbarAction(openExternalButton, "↗ Open this page in browser");
-            AddToolbarSeparator();
-            AddToolbarAction(libraryButton, "▦ Windows and recent");
-            AddToolbarAction(_bookmarksButton, "★ Open bookmarks sidebar");
-            AddToolbarAction(_newBookmarkButton, "☆ Add current page to bookmarks");
             AddToolbarAction(_trayShortcutButton, "📌 Keep this page as a tray shortcut");
-            AddToolbarAction(recentButton, "◷ Recent conversations");
-            AddToolbarSeparator();
+            AddToolbarTripleSeparator();
+            AddToolbarAction(_copyModeButton, "⧉ Copy mode: enable text selection");
+            AddToolbarAction(_notesButton, "✎ Show or hide notes");
             AddToolbarAction(captureButton, "▣ Capture full page as PNG");
+            AddToolbarTripleSeparator();
+            AddToolbarAction(_appearanceButton, "✦ Title, ID and icon");
+            AddToolbarTripleSeparator();
+            AddToolbarAction(_downloadsButton, "⇩ Downloads (Ctrl+J)");
+            AddToolbarAction(libraryButton, "▦ Windows and recent");
+            AddToolbarAction(_newBookmarkButton, "☆ Add current page to bookmarks");
+            AddToolbarAction(recentButton, "◷ Recent conversations");
+            AddToolbarAction(openExternalButton, "↗ Open this page in browser");
+            AddToolbarAction(settingsButton, "⚙ Options");
             _toolbar.Controls.Add(_menuButton);
             _toolbar.Controls.Add(_quickIdentifierBox);
             _toolbar.Controls.Add(_quickColorButton);
@@ -1111,7 +1124,7 @@ namespace ChatGPTLite
         private void ShowQuickColorPalette(Control owner)
         {
             ContextMenuStrip menu = new ContextMenuStrip();
-            const int columns = 6;
+            const int columns = 8;
             const int cellSize = 30;
             int rows = (int)Math.Ceiling(QuickColors.Length / (double)columns);
             Panel palette = new Panel();
@@ -1123,8 +1136,10 @@ namespace ChatGPTLite
                 Color color = QuickColors[index];
                 Button choice = new Button();
                 choice.FlatStyle = FlatStyle.Flat;
-                choice.FlatAppearance.BorderColor = Color.FromArgb(245, 245, 245);
+                choice.FlatAppearance.BorderColor = ControlPaint.Dark(color);
                 choice.BackColor = color;
+                choice.AccessibleName = "Window color " + color.Name;
+                choice.TabStop = true;
                 choice.Size = new Size(26, 26);
                 choice.Location = new Point(4 + (index % columns) * cellSize, 4 + (index / columns) * cellSize);
                 choice.Cursor = Cursors.Hand;
@@ -2499,6 +2514,13 @@ namespace ChatGPTLite
             _toolbarSeparators.Add(separator);
             _toolbarItems.Add(separator);
             _toolbar.Controls.Add(separator);
+        }
+
+        private void AddToolbarTripleSeparator()
+        {
+            AddToolbarSeparator();
+            AddToolbarSeparator();
+            AddToolbarSeparator();
         }
 
         private void LayoutToolbar()

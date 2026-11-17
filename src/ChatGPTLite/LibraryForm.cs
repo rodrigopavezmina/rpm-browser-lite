@@ -263,16 +263,19 @@ namespace ChatGPTLite
             bookmarkActions.Padding = new Padding(7, 7, 7, 5);
             Button addBookmarkButton = CreateButton("★ Bookmark selected window");
             Button openBookmarkButton = CreateButton("↗ Open bookmark");
+            Button importChromeDefaultButton = CreateButton("↓ Import Chrome Default");
             Button importBookmarksButton = CreateButton("↓ Import Chrome file");
             Button exportBookmarksButton = CreateButton("↑ Export HTML");
             Button removeBookmarkButton = CreateButton("× Remove");
             addBookmarkButton.Click += delegate { AddSelectedWindowBookmark(); };
             openBookmarkButton.Click += delegate { OpenSelectedBookmark(); };
+            importChromeDefaultButton.Click += delegate { ImportChromeDefaultBookmarks(); };
             importBookmarksButton.Click += delegate { ImportBookmarks(); };
             exportBookmarksButton.Click += delegate { ExportBookmarks(); };
             removeBookmarkButton.Click += delegate { RemoveSelectedBookmarks(); };
             bookmarkActions.Controls.Add(addBookmarkButton);
             bookmarkActions.Controls.Add(openBookmarkButton);
+            bookmarkActions.Controls.Add(importChromeDefaultButton);
             bookmarkActions.Controls.Add(importBookmarksButton);
             bookmarkActions.Controls.Add(exportBookmarksButton);
             bookmarkActions.Controls.Add(removeBookmarkButton);
@@ -925,6 +928,38 @@ namespace ChatGPTLite
                 {
                     MessageBox.Show("The bookmark file could not be imported.\r\n\r\n" + ex.Message, AppController.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
+            }
+            RefreshContent();
+        }
+
+        private void ImportChromeDefaultBookmarks()
+        {
+            try
+            {
+                int added = _app.ImportChromeDefaultBookmarks();
+                MessageBox.Show(
+                    added + " new bookmark(s) imported from Chrome Default.",
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (FileNotFoundException)
+            {
+                MessageBox.Show(
+                    "Chrome's Default profile bookmarks file was not found:\r\n\r\n" +
+                    _app.GetChromeDefaultBookmarksPath() +
+                    "\r\n\r\nUse 'Import Chrome file' if your bookmarks are stored in another profile.",
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Chrome's Default bookmarks could not be imported.\r\n\r\n" + ex.Message,
+                    AppController.ProductName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
             }
             RefreshContent();
         }

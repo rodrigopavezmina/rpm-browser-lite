@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.34";
+        public const string ProductVersion = "2.8.35";
         public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
         private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
@@ -100,6 +100,12 @@ namespace ChatGPTLite
                 if (_library != null && !_library.IsDisposed)
                     _library.RefreshContent();
             };
+
+            // Chrome stores the signed-in user's local bookmark tree in the
+            // Default profile. Import it once after the manager is ready; the
+            // explicit action in the Bookmarks tab can be used to refresh it.
+            if (!State.Settings.ChromeDefaultBookmarksImported)
+                _dispatcher.BeginInvoke((MethodInvoker)delegate { TryImportChromeDefaultBookmarks(); });
 
             ContextMenuStrip trayMenu = new ContextMenuStrip();
             trayMenu.Font = new Font("Segoe UI", 11f);
@@ -1080,9 +1086,11 @@ namespace ChatGPTLite
                 existing.FolderPath = NormalizeBookmarkFolder(folderPath);
             else if (existing.FolderPath == null)
                 existing.FolderPath = string.Empty;
-            QueueSave();
             if (!_bookmarkBatch)
+            {
+                QueueSave();
                 RefreshBookmarks();
+            }
             return existing;
         }
 
@@ -1127,6 +1135,43 @@ namespace ChatGPTLite
             QueueSave();
             RefreshBookmarks();
             return added;
+        }
+
+        public string GetChromeDefaultBookmarksPath()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return Path.Combine(localAppData, "Google", "Chrome", "User Data", "Default", "Bookmarks");
+        }
+
+        public int ImportChromeDefaultBookmarks()
+        {
+            string path = GetChromeDefaultBookmarksPath();
+            if (!File.Exists(path))
+                throw new FileNotFoundException("Chrome's Default profile bookmarks file was not found.", path);
+            int added = ImportBookmarks(path);
+            State.Settings.ChromeDefaultBookmarksImported = true;
+            QueueSave();
+            return added;
+        }
+
+        private void TryImportChromeDefaultBookmarks()
+        {
+            if (State.Settings.ChromeDefaultBookmarksImported)
+                return;
+            string path = GetChromeDefaultBookmarksPath();
+            if (!File.Exists(path))
+                return;
+            try
+            {
+                int added = ImportChromeDefaultBookmarks();
+                Log("Chrome Default bookmarks imported: " + added.ToString(), null);
+            }
+            catch (Exception ex)
+            {
+                // A locked or malformed Chrome file must never prevent the
+                // browser manager from starting; the manual action can retry.
+                Log("No se pudieron importar los bookmarks de Chrome Default", ex);
+            }
         }
 
         public void ExportBookmarks(string filePath)

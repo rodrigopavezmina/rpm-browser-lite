@@ -173,6 +173,11 @@ namespace ChatGPTLite
         [DataMember(Order = 18)]
         public List<string> BrowserExtensionPaths { get; set; }
 
+        // Set after the user's Chrome Default profile has been imported once.
+        // The explicit import action remains available for later refreshes.
+        [DataMember(Order = 19)]
+        public bool ChromeDefaultBookmarksImported { get; set; }
+
         public static AppSettings CreateDefault()
         {
             AppSettings settings = new AppSettings();
