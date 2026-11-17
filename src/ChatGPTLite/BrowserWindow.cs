@@ -1321,6 +1321,7 @@ namespace ChatGPTLite
                             {
                                 folder = new TreeNode("📁 " + part);
                                 folder.Name = current;
+                                ApplyBookmarkFolderNodeColors(folder);
                                 collection.Add(folder);
                                 folders[current] = folder;
                             }
@@ -1331,12 +1332,14 @@ namespace ChatGPTLite
                     TreeNode item = new TreeNode("🔖 " + title);
                     item.Tag = bookmark;
                     item.ToolTipText = bookmark.Url;
+                    ApplyBookmarkLeafNodeColors(item);
                     collection.Add(item);
                 }
                 if (_bookmarksTree.Nodes.Count == 0)
                 {
                     TreeNode empty = new TreeNode("No bookmarks yet");
                     empty.ForeColor = _app.State.Settings.DarkMode ? UiTheme.DarkMutedText : Color.FromArgb(110, 110, 110);
+                    empty.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkInput : Color.White;
                     _bookmarksTree.Nodes.Add(empty);
                 }
                 else
@@ -1492,7 +1495,28 @@ namespace ChatGPTLite
             UpdateCopyModeVisual();
             UpdateTrayShortcutVisual();
             UpdateHibernationPulse();
+            // Rebuild the lightweight tree so folder colours follow a theme change
+            // immediately, without keeping an extra colour map in memory.
+            RefreshBookmarks();
             LayoutToolbar();
+        }
+
+        private void ApplyBookmarkFolderNodeColors(TreeNode node)
+        {
+            if (node == null)
+                return;
+            bool dark = _app.State.Settings.DarkMode;
+            node.BackColor = dark ? Color.FromArgb(89, 78, 39) : Color.FromArgb(255, 248, 211);
+            node.ForeColor = dark ? Color.FromArgb(255, 239, 166) : Color.FromArgb(75, 60, 18);
+        }
+
+        private void ApplyBookmarkLeafNodeColors(TreeNode node)
+        {
+            if (node == null)
+                return;
+            bool dark = _app.State.Settings.DarkMode;
+            node.BackColor = dark ? UiTheme.DarkInput : Color.White;
+            node.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
         }
 
         private void ApplySleepTheme()

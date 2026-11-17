@@ -99,7 +99,7 @@ namespace ChatGPTLite
             filterLabel.AutoSize = true;
             filterLabel.Margin = new Padding(2, 6, 5, 0);
             Label searchLabel = new Label();
-            searchLabel.Text = "Search all:";
+            searchLabel.Text = "Search all (AND):";
             searchLabel.AutoSize = true;
             searchLabel.Margin = new Padding(2, 6, 5, 0);
             _searchBox = new TextBox();
@@ -108,6 +108,8 @@ namespace ChatGPTLite
             _searchBox.Margin = new Padding(0, 2, 12, 0);
             _searchBox.Font = new Font("Segoe UI", 9f);
             _searchBox.AccessibleName = "Search open windows, recent pages, bookmarks and recycle bin";
+            ToolTip searchTip = new ToolTip();
+            searchTip.SetToolTip(_searchBox, "Instant filter. Separate words with spaces: every word must match (AND). Double-click a result to open it.");
             _searchBox.TextChanged += delegate { RefreshContent(); };
             _searchBox.KeyDown += delegate(object sender, KeyEventArgs args)
             {
@@ -240,6 +242,7 @@ namespace ChatGPTLite
             _bookmarksList = CreateList();
             _bookmarksList.Columns.Add("Title", 340);
             _bookmarksList.Columns.Add("Address", 370);
+            _bookmarksList.Columns.Add("Folder", 190);
             _bookmarksList.Columns.Add("Added", 150);
             _bookmarksList.AllowDrop = true;
             _bookmarksList.DragEnter += BookmarkDragEnter;
@@ -365,6 +368,8 @@ namespace ChatGPTLite
             _previewCaption.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkSurface : UiTheme.LightBackground;
             _previewCaption.ForeColor = _app.State.Settings.DarkMode ? UiTheme.DarkText : UiTheme.LightText;
             _windowPreview.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkInput : Color.White;
+            if (_windowsList != null && !_windowsList.IsDisposed)
+                RefreshContent();
         }
 
         public void FocusSearch()
@@ -492,9 +497,12 @@ namespace ChatGPTLite
                     LocalTime(record.LastActiveUtc)
                 });
                 item.Tag = record.Id;
-                item.BackColor = _app.State.Settings.DarkMode
+                Color stateBackColor = _app.State.Settings.DarkMode
                     ? IconVisuals.DarkTint(stateColor)
                     : IconVisuals.PaleColor(stateColor);
+                item.BackColor = string.IsNullOrWhiteSpace(search)
+                    ? stateBackColor
+                    : BlendColors(stateBackColor, SearchHighlightColor(_app.State.Settings.DarkMode));
                 item.ForeColor = _app.State.Settings.DarkMode ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
                 _windowsList.Items.Add(item);
             }
@@ -519,6 +527,7 @@ namespace ChatGPTLite
                     recent.Url
                 });
                 item.Tag = recent.Url;
+                ApplySearchRowColor(item, search);
                 _recentsList.Items.Add(item);
             }
             _recentsList.EndUpdate();
@@ -536,9 +545,17 @@ namespace ChatGPTLite
                 {
                     string.IsNullOrWhiteSpace(bookmark.Title) ? bookmark.Url : bookmark.Title,
                     bookmark.Url,
+                    string.IsNullOrWhiteSpace(bookmark.FolderPath) ? "—" : bookmark.FolderPath,
                     LocalTime(bookmark.CreatedUtc)
                 });
                 item.Tag = bookmark;
+                Color bookmarkBackColor = string.IsNullOrWhiteSpace(bookmark.FolderPath)
+                    ? (_app.State.Settings.DarkMode ? UiTheme.DarkSurface : Color.White)
+                    : BookmarkFolderColor(_app.State.Settings.DarkMode);
+                item.BackColor = string.IsNullOrWhiteSpace(search)
+                    ? bookmarkBackColor
+                    : BlendColors(bookmarkBackColor, SearchHighlightColor(_app.State.Settings.DarkMode));
+                item.ForeColor = _app.State.Settings.DarkMode ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
                 _bookmarksList.Items.Add(item);
             }
             _bookmarksList.EndUpdate();
@@ -569,6 +586,7 @@ namespace ChatGPTLite
                     record.Url
                 });
                 item.Tag = deleted;
+                ApplySearchRowColor(item, search);
                 _recycleList.Items.Add(item);
             }
             _recycleList.EndUpdate();
@@ -1141,6 +1159,39 @@ namespace ChatGPTLite
                     return false;
             }
             return true;
+        }
+
+        private void ApplySearchRowColor(ListViewItem item, string search)
+        {
+            if (item == null)
+                return;
+            bool dark = _app.State.Settings.DarkMode;
+            item.BackColor = string.IsNullOrWhiteSpace(search)
+                ? (dark ? UiTheme.DarkSurface : Color.White)
+                : SearchHighlightColor(dark);
+            item.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
+        }
+
+        private static Color SearchHighlightColor(bool dark)
+        {
+            // A cool blue makes filtered rows easy to scan without overpowering
+            // the state colours already used by the open-window table.
+            return dark ? Color.FromArgb(43, 70, 98) : Color.FromArgb(226, 241, 255);
+        }
+
+        private static Color BookmarkFolderColor(bool dark)
+        {
+            // Warm yellow identifies a folder, with a muted gold variant that
+            // remains readable against the dark manager theme.
+            return dark ? Color.FromArgb(89, 78, 39) : Color.FromArgb(255, 248, 211);
+        }
+
+        private static Color BlendColors(Color first, Color second)
+        {
+            return Color.FromArgb(
+                (first.R + second.R) / 2,
+                (first.G + second.G) / 2,
+                (first.B + second.B) / 2);
         }
 
         private static Button CreateButton(string text)
