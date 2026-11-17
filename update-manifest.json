@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.37",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.37/RPM-Browser-Lite-Setup-2.8.37-x64.exe",
-    "notes":  "Añade buscador instantáneo en bookmarks y barra superior; los espacios funcionan como AND y se resaltan carpetas y resultados.",
-    "sha256":  "1A97072A97E61AA43B8D639C25FC261665BC9505DE5DDC54BCD5E48CD0A0F6F5"
+    "version":  "2.8.38",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.38/RPM-Browser-Lite-Setup-2.8.38-x64.exe",
+    "notes":  "Hace visible el buscador de bookmarks y mantiene la búsqueda local AND en la barra superior.",
+    "sha256":  "6CFBDC6F49CF039BD6B3008CBA81550A8E1C0248C18D7AA92C3A01CC3301D5D1"
 }

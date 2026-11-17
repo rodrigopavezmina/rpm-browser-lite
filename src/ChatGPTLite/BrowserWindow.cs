@@ -3788,14 +3788,22 @@ namespace ChatGPTLite
             header.Height = 70;
 
             heading = new Label();
-            heading.Dock = DockStyle.Fill;
+            // Keep the title in its own row. Dock=Fill could cover the search
+            // controls below it because of WinForms z-order.
+            heading.Dock = DockStyle.None;
+            heading.AutoSize = false;
+            heading.Left = 8;
+            heading.Top = 0;
+            heading.Width = panel.Width - 46;
+            heading.Height = 34;
+            heading.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             heading.Padding = new Padding(11, 0, 4, 0);
             heading.TextAlign = ContentAlignment.MiddleLeft;
             heading.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
             heading.Text = "Bookmarks";
 
             Label searchLabel = new Label();
-            searchLabel.Text = "Filter (AND):";
+            searchLabel.Text = "Search:";
             searchLabel.AutoSize = true;
             searchLabel.Font = new Font("Segoe UI", 8f);
             searchLabel.Location = new Point(8, 43);
@@ -3815,8 +3823,12 @@ namespace ChatGPTLite
 
             close = new Button();
             close.Text = "×";
-            close.Dock = DockStyle.Right;
+            close.Dock = DockStyle.None;
+            close.Left = panel.Width - 38;
+            close.Top = 0;
             close.Width = 38;
+            close.Height = 34;
+            close.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             close.FlatStyle = FlatStyle.Flat;
             close.FlatAppearance.BorderSize = 0;
             close.Font = new Font("Segoe UI", 14f);
