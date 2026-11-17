@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.38";
+        public const string ProductVersion = "2.8.40";
         public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
         private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
@@ -91,6 +91,19 @@ namespace ChatGPTLite
             };
             if (_defaultUpdateManifestApplied)
                 QueueSave();
+
+            // Existing installations already marked Chrome as imported before
+            // order preservation existed.  Re-read once in the UI loop so the
+            // migration never delays the low-memory startup path.
+            if (State.Settings.ChromeDefaultBookmarksImported &&
+                State.Settings.ChromeDefaultBookmarksOrderVersion < 1)
+            {
+                _dispatcher.BeginInvoke((MethodInvoker)delegate
+                {
+                    try { ImportChromeDefaultBookmarks(); }
+                    catch (Exception ex) { Log("No se pudo actualizar el orden de Chrome", ex); }
+                });
+            }
 
             _libraryRefreshTimer = new System.Windows.Forms.Timer();
             _libraryRefreshTimer.Interval = 250;
@@ -1105,6 +1118,8 @@ namespace ChatGPTLite
 
             string content = File.ReadAllText(filePath, Encoding.UTF8);
             int added = 0;
+            List<string> importedOrder = new List<string>();
+            HashSet<string> importedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _bookmarkBatch = true;
             try
             {
@@ -1113,9 +1128,11 @@ namespace ChatGPTLite
                     try
                     {
                         int before = State.Bookmarks.Count;
-                        AddBookmark(item.Url, item.Title, item.FolderPath);
+                        BookmarkRecord imported = AddBookmark(item.Url, item.Title, item.FolderPath);
                         if (State.Bookmarks.Count > before)
                             added++;
+                        if (imported != null && importedUrls.Add(imported.Url))
+                            importedOrder.Add(imported.Url);
                     }
                     catch
                     {
@@ -1127,6 +1144,21 @@ namespace ChatGPTLite
                 _bookmarkBatch = false;
             }
             QueueSave();
+            if (importedOrder.Count > 0)
+            {
+                Dictionary<string, int> order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int index = 0; index < importedOrder.Count; index++)
+                    order[importedOrder[index]] = index;
+                State.Bookmarks = State.Bookmarks
+                    .OrderBy(delegate(BookmarkRecord item)
+                    {
+                        int index;
+                        return item != null && item.Url != null && order.TryGetValue(item.Url, out index)
+                            ? index
+                            : int.MaxValue;
+                    })
+                    .ToList();
+            }
             RefreshBookmarks();
             return added;
         }
@@ -1144,6 +1176,7 @@ namespace ChatGPTLite
                 throw new FileNotFoundException("Chrome's Default profile bookmarks file was not found.", path);
             int added = ImportBookmarks(path);
             State.Settings.ChromeDefaultBookmarksImported = true;
+            State.Settings.ChromeDefaultBookmarksOrderVersion = 1;
             QueueSave();
             return added;
         }
@@ -1968,8 +2001,26 @@ namespace ChatGPTLite
                 IDictionary roots = rootsObject as IDictionary;
                 if (roots == null)
                     return results;
+                // Chrome's bookmark bar is the primary visual order.  Walk the
+                // well-known roots first, then any profile-specific roots, while
+                // preserving each folder's original children order.
+                string[] preferredRoots = new string[] { "bookmark_bar", "other", "synced", "mobile" };
+                HashSet<string> visitedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string rootName in preferredRoots)
+                {
+                    object rootNode;
+                    if (roots.Contains(rootName) && (rootNode = roots[rootName]) != null)
+                    {
+                        WalkChromeBookmarkNode(rootNode as Dictionary<string, object>, string.Empty, results);
+                        visitedRoots.Add(rootName);
+                    }
+                }
                 foreach (DictionaryEntry entry in roots)
-                    WalkChromeBookmarkNode(entry.Value as Dictionary<string, object>, string.Empty, results);
+                {
+                    string rootName = entry.Key == null ? string.Empty : entry.Key.ToString();
+                    if (!visitedRoots.Contains(rootName))
+                        WalkChromeBookmarkNode(entry.Value as Dictionary<string, object>, string.Empty, results);
+                }
             }
             catch
             {

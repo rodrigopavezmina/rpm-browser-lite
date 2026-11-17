@@ -538,8 +538,7 @@ namespace ChatGPTLite
                 .Where(delegate(BookmarkRecord item)
                 {
                     return string.IsNullOrWhiteSpace(search) || MatchesLibrarySearch(search, item.Title, item.Url, item.FolderPath);
-                })
-                .OrderBy(delegate(BookmarkRecord item) { return item.Title; }))
+                }))
             {
                 ListViewItem item = new ListViewItem(new string[]
                 {

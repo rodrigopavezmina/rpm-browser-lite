@@ -178,6 +178,10 @@ namespace ChatGPTLite
         [DataMember(Order = 19)]
         public bool ChromeDefaultBookmarksImported { get; set; }
 
+        // Version of the Chrome ordering migration applied to the local list.
+        [DataMember(Order = 20)]
+        public int ChromeDefaultBookmarksOrderVersion { get; set; }
+
         public static AppSettings CreateDefault()
         {
             AppSettings settings = new AppSettings();
@@ -199,6 +203,7 @@ namespace ChatGPTLite
             settings.HibernationIndicatorStyle = 1;
             settings.BrowserExtensionsEnabled = true;
             settings.BrowserExtensionPaths = new List<string>();
+            settings.ChromeDefaultBookmarksOrderVersion = 1;
             return settings;
         }
 

@@ -1366,9 +1366,7 @@ namespace ChatGPTLite
                     {
                         return item != null && !string.IsNullOrWhiteSpace(item.Url) &&
                             MatchesAddressSearch(search, item.Title, item.FolderPath, item.Url);
-                    })
-                    .OrderBy(delegate(BookmarkRecord item) { return item.FolderPath ?? string.Empty; })
-                    .ThenBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; }))
+                    }))
                 {
                     TreeNodeCollection collection = _bookmarksTree.Nodes;
                     string path = bookmark.FolderPath ?? string.Empty;
@@ -1425,7 +1423,6 @@ namespace ChatGPTLite
             // bookmarks first, then the newest history, and never touches the network.
             foreach (BookmarkRecord bookmark in _app.State.Bookmarks
                 .Where(delegate(BookmarkRecord item) { return item != null && !string.IsNullOrWhiteSpace(item.Url); })
-                .OrderBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; })
                 .Take(120))
             {
                 string folder = string.IsNullOrWhiteSpace(bookmark.FolderPath) ? string.Empty : " - " + bookmark.FolderPath;
@@ -1469,8 +1466,7 @@ namespace ChatGPTLite
                 {
                     return item != null && !string.IsNullOrWhiteSpace(item.Url) &&
                         MatchesAddressSearch(query, item.Title, item.FolderPath, item.Url);
-                })
-                .OrderBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; }))
+                }))
             {
                 if (!seenUrls.Add(bookmark.Url))
                     continue;
@@ -3142,7 +3138,6 @@ namespace ChatGPTLite
 
                 foreach (BookmarkRecord bookmark in _app.State.Bookmarks
                     .Where(delegate(BookmarkRecord item) { return MatchesStartSearch(item == null ? string.Empty : (item.Title + " " + item.FolderPath), item == null ? string.Empty : item.Url, search); })
-                    .OrderBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; })
                     .Take(12))
                     AddStartTile(_startFrequentTiles, bookmark);
 
@@ -3188,7 +3183,6 @@ namespace ChatGPTLite
             shown.Add(chatGpt.Url);
             foreach (BookmarkRecord bookmark in _app.State.Bookmarks
                 .Where(delegate(BookmarkRecord item) { return item != null && !string.IsNullOrWhiteSpace(item.Url); })
-                .OrderByDescending(delegate(BookmarkRecord item) { return item.CreatedUtc; })
                 .Take(8))
             {
                 if (shown.Contains(bookmark.Url))
@@ -3254,7 +3248,6 @@ namespace ChatGPTLite
 
             BookmarkRecord bookmark = _app.State.Bookmarks
                 .Where(delegate(BookmarkRecord item) { return MatchesStartSearch(item == null ? string.Empty : (item.Title + " " + item.FolderPath), item == null ? string.Empty : item.Url, query); })
-                .OrderBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; })
                 .FirstOrDefault();
             if (bookmark != null && !string.IsNullOrWhiteSpace(bookmark.Url))
             {
@@ -3288,11 +3281,7 @@ namespace ChatGPTLite
 
         private static bool MatchesStartSearch(string title, string url, string query)
         {
-            string needle = NormalizeStartSearchText(query);
-            if (string.IsNullOrWhiteSpace(needle))
-                return false;
-            return NormalizeStartSearchText(title).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   NormalizeStartSearchText(url).IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+            return MatchesAddressSearch(query, title, url);
         }
 
         private static string NormalizeStartSearchText(string value)
