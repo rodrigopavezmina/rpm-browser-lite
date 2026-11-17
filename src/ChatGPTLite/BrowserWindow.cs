@@ -38,6 +38,7 @@ namespace ChatGPTLite
         private readonly PictureBox _sleepPreview;
         private readonly Panel _bookmarksPanel;
         private readonly TreeView _bookmarksTree;
+        private readonly TextBox _bookmarksSearchBox;
         private readonly Panel _bookmarksHeader;
         private readonly Label _bookmarksHeading;
         private readonly Button _bookmarksCloseButton;
@@ -69,6 +70,7 @@ namespace ChatGPTLite
         private readonly Button _urlDragButton;
         private readonly TextBox _addressBox;
         private readonly Button _addressGoButton;
+        private readonly ListBox _addressSuggestionsList;
         private readonly List<Button> _toolbarButtons;
         private readonly List<Control> _toolbarItems;
         private readonly List<Panel> _toolbarSeparators;
@@ -254,6 +256,20 @@ namespace ChatGPTLite
             _addressGoButton.Font = new Font("Segoe UI Symbol", 11f);
             _addressGoButton.AccessibleName = "Go to the typed address";
 
+            _addressSuggestionsList = new ListBox();
+            _addressSuggestionsList.Visible = false;
+            _addressSuggestionsList.IntegralHeight = false;
+            _addressSuggestionsList.Height = 196;
+            _addressSuggestionsList.Font = new Font("Segoe UI", 9f);
+            _addressSuggestionsList.BorderStyle = BorderStyle.FixedSingle;
+            _addressSuggestionsList.HorizontalScrollbar = true;
+            _addressSuggestionsList.TabStop = false;
+            _addressSuggestionsList.AccessibleName = "Bookmark and recent page suggestions";
+            _addressSuggestionsList.DoubleClick += delegate
+            {
+                OpenSelectedAddressSuggestion();
+            };
+
             // Keep the high-frequency actions at the beginning of the toolbar.
             AddToolbarAction(_cloneButton, "⧈ Clone this window");
             AddToolbarAction(newButton, "✚ New window");
@@ -382,6 +398,7 @@ namespace ChatGPTLite
 
             _bookmarksPanel = CreateBookmarksPanel(
                 out _bookmarksTree,
+                out _bookmarksSearchBox,
                 out _bookmarksHeader,
                 out _bookmarksHeading,
                 out _bookmarksCloseButton);
@@ -402,6 +419,7 @@ namespace ChatGPTLite
             _webArea.Controls.Add(_sleepPanel);
             _webArea.Controls.Add(_startPanel);
             _webArea.Controls.Add(_bookmarksPanel);
+            _webArea.Controls.Add(_addressSuggestionsList);
             Controls.Add(_webArea);
             Controls.Add(_notesPanel);
             Controls.Add(_toolbar);
@@ -430,6 +448,7 @@ namespace ChatGPTLite
             _toolTip.SetToolTip(_quickIdentifierBox, "Type 1 to 50 and press Enter (for example, 7 becomes TD-D07)");
             _toolTip.SetToolTip(_addressBox, "Type a bookmark, recent page, URL or Google search, then press Enter");
             _toolTip.SetToolTip(_addressGoButton, "Open a matching bookmark/recent page, URL or Google search");
+            _toolTip.SetToolTip(_addressSuggestionsList, "Use Up/Down and Enter, or double-click a bookmark/recent page");
             _toolTip.SetToolTip(_startSearchBox, "Buscar un bookmark por nombre o URL; Enter abre el primero");
 
             _backButton.Click += delegate { if (CoreWebView2 != null && CoreWebView2.CanGoBack) CoreWebView2.GoBack(); };
@@ -463,17 +482,29 @@ namespace ChatGPTLite
             _addressGoButton.Click += delegate { NavigateFromAddressBox(); };
             _quickIdentifierBox.KeyDown += QuickIdentifierKeyDown;
             _quickIdentifierBox.Leave += delegate { ApplyQuickIdentifier(); };
-            _addressBox.Leave += delegate { RefreshAddressSuggestions(); };
+            _addressBox.Leave += delegate
+            {
+                RefreshAddressSuggestions();
+                BeginInvoke((MethodInvoker)delegate { HideAddressSearchPopup(); });
+            };
+            _addressBox.TextChanged += delegate
+            {
+                if (_addressBox.Focused)
+                    UpdateAddressSearchPopup();
+            };
             _addressBox.Enter += delegate
             {
-                if (!_startDashboardVisible)
-                    return;
-                StopStartDashboardCountdown();
-                if (!_startAddressEditPrepared)
+                if (_startDashboardVisible)
                 {
-                    _addressBox.Clear();
-                    _startAddressEditPrepared = true;
+                    StopStartDashboardCountdown();
+                    if (!_startAddressEditPrepared)
+                    {
+                        _addressBox.Clear();
+                        _startAddressEditPrepared = true;
+                    }
                 }
+                RefreshAddressSuggestions();
+                UpdateAddressSearchPopup();
             };
             _addressBox.MouseDown += delegate
             {
@@ -482,9 +513,30 @@ namespace ChatGPTLite
             };
             _addressBox.KeyDown += delegate(object sender, KeyEventArgs args)
             {
-                if (args.KeyCode == Keys.Enter)
+                if (args.KeyCode == Keys.Down && _addressSuggestionsList.Visible && _addressSuggestionsList.Items.Count > 0)
                 {
-                    NavigateFromAddressBox();
+                    _addressSuggestionsList.SelectedIndex = Math.Min(_addressSuggestionsList.Items.Count - 1, _addressSuggestionsList.SelectedIndex + 1);
+                    args.SuppressKeyPress = true;
+                    args.Handled = true;
+                }
+                else if (args.KeyCode == Keys.Up && _addressSuggestionsList.Visible && _addressSuggestionsList.Items.Count > 0)
+                {
+                    _addressSuggestionsList.SelectedIndex = Math.Max(0, _addressSuggestionsList.SelectedIndex - 1);
+                    args.SuppressKeyPress = true;
+                    args.Handled = true;
+                }
+                else if (args.KeyCode == Keys.Enter)
+                {
+                    if (_addressSuggestionsList.Visible && _addressSuggestionsList.SelectedItem is AddressSuggestionEntry)
+                        OpenSelectedAddressSuggestion();
+                    else
+                        NavigateFromAddressBox();
+                    args.SuppressKeyPress = true;
+                    args.Handled = true;
+                }
+                else if (args.KeyCode == Keys.Escape)
+                {
+                    HideAddressSearchPopup();
                     args.SuppressKeyPress = true;
                     args.Handled = true;
                 }
@@ -706,11 +758,15 @@ namespace ChatGPTLite
 
         private static int AddressMatchScore(string title, string url, string query)
         {
+            if (!MatchesAddressSearch(query, title, url))
+                return 0;
             string needle = NormalizeStartSearchText(query);
             if (needle.Length == 0)
                 return 0;
             string searchableTitle = NormalizeStartSearchText(title);
             string searchableUrl = NormalizeStartSearchText(url);
+            if (query.IndexOfAny(new char[] { ' ', '\t', '\r', '\n' }) >= 0)
+                return 2;
             if (string.Equals(searchableTitle, needle, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(searchableUrl, needle, StringComparison.OrdinalIgnoreCase))
                 return 4;
@@ -1298,13 +1354,19 @@ namespace ChatGPTLite
             if (_bookmarksTree == null || _bookmarksTree.IsDisposed)
                 return;
 
+            string search = _bookmarksSearchBox == null ? string.Empty : (_bookmarksSearchBox.Text ?? string.Empty).Trim();
+
             _bookmarksTree.BeginUpdate();
             try
             {
                 _bookmarksTree.Nodes.Clear();
                 Dictionary<string, TreeNode> folders = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
                 foreach (BookmarkRecord bookmark in _app.State.Bookmarks
-                    .Where(delegate(BookmarkRecord item) { return item != null && !string.IsNullOrWhiteSpace(item.Url); })
+                    .Where(delegate(BookmarkRecord item)
+                    {
+                        return item != null && !string.IsNullOrWhiteSpace(item.Url) &&
+                            MatchesAddressSearch(search, item.Title, item.FolderPath, item.Url);
+                    })
                     .OrderBy(delegate(BookmarkRecord item) { return item.FolderPath ?? string.Empty; })
                     .ThenBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; }))
                 {
@@ -1332,12 +1394,12 @@ namespace ChatGPTLite
                     TreeNode item = new TreeNode("🔖 " + title);
                     item.Tag = bookmark;
                     item.ToolTipText = bookmark.Url;
-                    ApplyBookmarkLeafNodeColors(item);
+                    ApplyBookmarkLeafNodeColors(item, search.Length > 0);
                     collection.Add(item);
                 }
                 if (_bookmarksTree.Nodes.Count == 0)
                 {
-                    TreeNode empty = new TreeNode("No bookmarks yet");
+                    TreeNode empty = new TreeNode(search.Length == 0 ? "No bookmarks yet" : "No bookmarks match this search");
                     empty.ForeColor = _app.State.Settings.DarkMode ? UiTheme.DarkMutedText : Color.FromArgb(110, 110, 110);
                     empty.BackColor = _app.State.Settings.DarkMode ? UiTheme.DarkInput : Color.White;
                     _bookmarksTree.Nodes.Add(empty);
@@ -1354,8 +1416,6 @@ namespace ChatGPTLite
         private void RefreshAddressSuggestions()
         {
             if (_addressSuggestionTexts == null || _addressSuggestionUrls == null)
-                return;
-            if (_addressBox != null && _addressBox.Focused)
                 return;
 
             _addressSuggestionTexts.Clear();
@@ -1381,6 +1441,139 @@ namespace ChatGPTLite
                 AddAddressSuggestion(string.IsNullOrWhiteSpace(recent.Title) ? recent.Url : recent.Title, recent.Url);
                 AddAddressSuggestion(recent.Url, recent.Url);
             }
+
+            if (_addressBox != null && _addressBox.Focused)
+                UpdateAddressSearchPopup();
+        }
+
+        private void UpdateAddressSearchPopup()
+        {
+            if (_addressSuggestionsList == null || _addressSuggestionsList.IsDisposed ||
+                _addressBox == null || !_addressBox.Focused || _startDashboardVisible || _isHibernated)
+            {
+                HideAddressSearchPopup();
+                return;
+            }
+
+            string query = (_addressBox.Text ?? string.Empty).Trim();
+            if (query.Length == 0)
+            {
+                HideAddressSearchPopup();
+                return;
+            }
+
+            List<AddressSuggestionEntry> entries = new List<AddressSuggestionEntry>();
+            HashSet<string> seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (BookmarkRecord bookmark in _app.State.Bookmarks
+                .Where(delegate(BookmarkRecord item)
+                {
+                    return item != null && !string.IsNullOrWhiteSpace(item.Url) &&
+                        MatchesAddressSearch(query, item.Title, item.FolderPath, item.Url);
+                })
+                .OrderBy(delegate(BookmarkRecord item) { return item.Title ?? item.Url; }))
+            {
+                if (!seenUrls.Add(bookmark.Url))
+                    continue;
+                string title = string.IsNullOrWhiteSpace(bookmark.Title) ? bookmark.Url : bookmark.Title;
+                string folder = string.IsNullOrWhiteSpace(bookmark.FolderPath) ? string.Empty : "  ·  " + bookmark.FolderPath;
+                entries.Add(new AddressSuggestionEntry("★ " + title + folder, bookmark.Url));
+                if (entries.Count >= 8)
+                    break;
+            }
+
+            if (entries.Count < 8)
+            {
+                foreach (RecentRecord recent in _app.State.Recents
+                    .Where(delegate(RecentRecord item)
+                    {
+                        return item != null && !string.IsNullOrWhiteSpace(item.Url) &&
+                            MatchesAddressSearch(query, item.Title, item.Url);
+                    })
+                    .OrderByDescending(delegate(RecentRecord item) { return item.LastOpenedUtc; }))
+                {
+                    if (!seenUrls.Add(recent.Url))
+                        continue;
+                    string title = string.IsNullOrWhiteSpace(recent.Title) ? recent.Url : recent.Title;
+                    entries.Add(new AddressSuggestionEntry("◷ " + title, recent.Url));
+                    if (entries.Count >= 8)
+                        break;
+                }
+            }
+
+            _addressSuggestionsList.BeginUpdate();
+            try
+            {
+                _addressSuggestionsList.Items.Clear();
+                foreach (AddressSuggestionEntry entry in entries)
+                    _addressSuggestionsList.Items.Add(entry);
+                _addressSuggestionsList.SelectedIndex = entries.Count == 0 ? -1 : 0;
+            }
+            finally
+            {
+                _addressSuggestionsList.EndUpdate();
+            }
+
+            _addressSuggestionsList.Visible = entries.Count > 0;
+            if (_addressSuggestionsList.Visible)
+            {
+                PositionAddressSearchPopup();
+                _addressSuggestionsList.BringToFront();
+            }
+        }
+
+        private void OpenSelectedAddressSuggestion()
+        {
+            AddressSuggestionEntry entry = _addressSuggestionsList == null
+                ? null
+                : _addressSuggestionsList.SelectedItem as AddressSuggestionEntry;
+            if (entry == null || string.IsNullOrWhiteSpace(entry.Url))
+                return;
+            HideAddressSearchPopup();
+            _addressBox.Text = entry.Url;
+            Navigate(entry.Url);
+        }
+
+        private void PositionAddressSearchPopup()
+        {
+            if (_addressSuggestionsList == null || _addressSuggestionsList.IsDisposed ||
+                _addressBox == null || !_addressBox.Visible || _webArea == null)
+                return;
+            Point screen = _addressBox.PointToScreen(Point.Empty);
+            Point local = _webArea.PointToClient(screen);
+            _addressSuggestionsList.Left = local.X;
+            _addressSuggestionsList.Top = local.Y + _addressBox.Height + 2;
+            _addressSuggestionsList.Width = Math.Max(180, _addressBox.Width);
+            _addressSuggestionsList.Height = Math.Min(196, Math.Max(52, _addressSuggestionsList.Items.Count * 24 + 4));
+        }
+
+        private void HideAddressSearchPopup()
+        {
+            if (_addressSuggestionsList != null && !_addressSuggestionsList.IsDisposed)
+                _addressSuggestionsList.Visible = false;
+        }
+
+        private static bool MatchesAddressSearch(string query, params string[] values)
+        {
+            string[] terms = (query ?? string.Empty)
+                .Split(new char[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (terms.Length == 0)
+                return true;
+            foreach (string term in terms)
+            {
+                bool found = false;
+                foreach (string value in values ?? new string[0])
+                {
+                    if (!string.IsNullOrWhiteSpace(value) &&
+                        value.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+            }
+            return true;
         }
 
         private void AddAddressSuggestion(string text, string url)
@@ -1466,6 +1659,8 @@ namespace ChatGPTLite
             _bookmarksCloseButton.FlatAppearance.MouseOverBackColor = ControlPaint.Light(accent);
             _bookmarksTree.BackColor = dark ? UiTheme.DarkInput : Color.White;
             _bookmarksTree.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
+            _bookmarksSearchBox.BackColor = dark ? UiTheme.DarkInput : Color.White;
+            _bookmarksSearchBox.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(35, 35, 35);
             _notesHeader.BackColor = accent;
             _notesHeading.ForeColor = foreground;
             _notesFooter.BackColor = noteSurface;
@@ -1489,6 +1684,8 @@ namespace ChatGPTLite
             _addressGoButton.ForeColor = foreground;
             _addressGoButton.FlatAppearance.MouseOverBackColor = ControlPaint.Light(accent);
             _addressGoButton.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(accent);
+            _addressSuggestionsList.BackColor = dark ? UiTheme.DarkInput : Color.White;
+            _addressSuggestionsList.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(35, 35, 35);
             SetNotesVisible(Record.NotesVisible, false);
             ApplyStartDashboardTheme();
             UpdateCaffeineVisual();
@@ -1510,12 +1707,14 @@ namespace ChatGPTLite
             node.ForeColor = dark ? Color.FromArgb(255, 239, 166) : Color.FromArgb(75, 60, 18);
         }
 
-        private void ApplyBookmarkLeafNodeColors(TreeNode node)
+        private void ApplyBookmarkLeafNodeColors(TreeNode node, bool filtered)
         {
             if (node == null)
                 return;
             bool dark = _app.State.Settings.DarkMode;
-            node.BackColor = dark ? UiTheme.DarkInput : Color.White;
+            node.BackColor = filtered
+                ? (dark ? Color.FromArgb(43, 70, 98) : Color.FromArgb(226, 241, 255))
+                : (dark ? UiTheme.DarkInput : Color.White);
             node.ForeColor = dark ? UiTheme.DarkText : Color.FromArgb(40, 40, 40);
         }
 
@@ -2573,6 +2772,7 @@ namespace ChatGPTLite
                 _menuButton.Visible = false;
                 _addressBox.Visible = false;
                 _addressGoButton.Visible = false;
+                HideAddressSearchPopup();
                 _reloadButton.Visible = true;
                 _reloadButton.Left = 8;
                 _reloadButton.Top = 3;
@@ -2671,6 +2871,7 @@ namespace ChatGPTLite
                 _addressBox.Left = _urlDragButton.Right + 2;
                 _addressBox.Top = 13;
                 _addressBox.Width = Math.Max(120, _addressGoButton.Left - _addressBox.Left - 2);
+                PositionAddressSearchPopup();
                 _statusLabel.Visible = false;
             }
         }
@@ -3572,6 +3773,7 @@ namespace ChatGPTLite
 
         private Panel CreateBookmarksPanel(
             out TreeView tree,
+            out TextBox searchBox,
             out Panel header,
             out Label heading,
             out Button close)
@@ -3583,7 +3785,7 @@ namespace ChatGPTLite
 
             header = new Panel();
             header.Dock = DockStyle.Top;
-            header.Height = 38;
+            header.Height = 70;
 
             heading = new Label();
             heading.Dock = DockStyle.Fill;
@@ -3591,6 +3793,25 @@ namespace ChatGPTLite
             heading.TextAlign = ContentAlignment.MiddleLeft;
             heading.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
             heading.Text = "Bookmarks";
+
+            Label searchLabel = new Label();
+            searchLabel.Text = "Filter (AND):";
+            searchLabel.AutoSize = true;
+            searchLabel.Font = new Font("Segoe UI", 8f);
+            searchLabel.Location = new Point(8, 43);
+
+            TextBox bookmarkSearch = new TextBox();
+            bookmarkSearch.Height = 23;
+            bookmarkSearch.Left = 78;
+            bookmarkSearch.Top = 40;
+            bookmarkSearch.Width = panel.Width - 86;
+            bookmarkSearch.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            bookmarkSearch.BorderStyle = BorderStyle.FixedSingle;
+            bookmarkSearch.Font = new Font("Segoe UI", 8.5f);
+            bookmarkSearch.AccessibleName = "Filter bookmarks; spaces mean AND";
+            ToolTip bookmarkSearchTip = new ToolTip();
+            bookmarkSearchTip.SetToolTip(bookmarkSearch, "Type words separated by spaces; every word must match (AND). Results update instantly.");
+            bookmarkSearch.TextChanged += delegate { RefreshBookmarks(); };
 
             close = new Button();
             close.Text = "×";
@@ -3623,9 +3844,12 @@ namespace ChatGPTLite
 
             header.Controls.Add(heading);
             header.Controls.Add(close);
+            header.Controls.Add(searchLabel);
+            header.Controls.Add(bookmarkSearch);
             panel.Controls.Add(bookmarkTree);
             panel.Controls.Add(header);
             tree = bookmarkTree;
+            searchBox = bookmarkSearch;
             return panel;
         }
 
@@ -4026,6 +4250,23 @@ namespace ChatGPTLite
             return space >= 0 && space + 1 < accessibleLabel.Length
                 ? accessibleLabel.Substring(space + 1).Trim()
                 : accessibleLabel.Trim();
+        }
+
+        private sealed class AddressSuggestionEntry
+        {
+            public readonly string Label;
+            public readonly string Url;
+
+            public AddressSuggestionEntry(string label, string url)
+            {
+                Label = label ?? string.Empty;
+                Url = url ?? string.Empty;
+            }
+
+            public override string ToString()
+            {
+                return Label;
+            }
         }
 
         private static bool ShouldOpenExternally(Uri uri)
