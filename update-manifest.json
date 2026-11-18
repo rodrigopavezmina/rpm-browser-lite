@@ -1,6 +1,6 @@
 ﻿{
-    "version":  "2.8.41",
-    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Setup-2.8.41-x64.exe",
-    "notes":  "Detecta perfiles locales de Cent Browser y otros navegadores Chromium, conserva carpetas y orden sin pedir credenciales.",
-    "sha256":  "1cb80945314e3f7cf2e6037e89284fbf50308841ccdba199563c87e18eef22f5"
+    "version":  "2.8.42",
+    "downloadUrl":  "https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.42/RPM-Browser-Lite-Setup-2.8.42-x64.exe",
+    "notes":  "Reordena la barra con ID/icono al inicio y calcula un color de acento desde el favicon salvo que se haya elegido manualmente.",
+    "sha256":  "cc86badc0565a97ad283e5558d2d46c285a593a6e15b49b41a36d8583060a7d1"
 }

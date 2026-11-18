@@ -88,6 +88,58 @@ namespace ChatGPTLite
                 (color.B * 18 + 255 * 82) / 100);
         }
 
+        public static bool TryGetAverageColor(string path, out Color color)
+        {
+            color = Color.Empty;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+            try
+            {
+                using (Image source = Image.FromFile(path))
+                using (Bitmap bitmap = new Bitmap(source))
+                {
+                    long red = 0;
+                    long green = 0;
+                    long blue = 0;
+                    long weightTotal = 0;
+                    int stepX = Math.Max(1, bitmap.Width / 32);
+                    int stepY = Math.Max(1, bitmap.Height / 32);
+                    for (int y = 0; y < bitmap.Height; y += stepY)
+                    {
+                        for (int x = 0; x < bitmap.Width; x += stepX)
+                        {
+                            Color pixel = bitmap.GetPixel(x, y);
+                            int weight = pixel.A;
+                            // Transparent padding and white favicon canvases should
+                            // not wash out the accent used by the toolbar.
+                            if (weight < 32)
+                                continue;
+                            if (pixel.R > 245 && pixel.G > 245 && pixel.B > 245)
+                                weight /= 5;
+                            if (weight <= 0)
+                                continue;
+                            red += pixel.R * (long)weight;
+                            green += pixel.G * (long)weight;
+                            blue += pixel.B * (long)weight;
+                            weightTotal += weight;
+                        }
+                    }
+                    if (weightTotal <= 0)
+                        return false;
+                    color = Color.FromArgb(
+                        255,
+                        (int)(red / weightTotal),
+                        (int)(green / weightTotal),
+                        (int)(blue / weightTotal));
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static Color WaterTint(Color color)
         {
             Color water = Color.FromArgb(189, 236, 232);

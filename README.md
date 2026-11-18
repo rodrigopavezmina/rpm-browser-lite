@@ -4,9 +4,9 @@ Navegador ligero para Windows pensado para mantener muchas páginas, cuentas y p
 
 ## Descargar
 
-- [Instalador Windows x64 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Setup-2.8.41-x64.exe)
-- [Versión portable x64 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.41/RPM-Browser-Lite-Portable-2.8.41-x64.zip)
-- [Notas de la versión 2.8.41](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.41)
+- [Instalador Windows x64 2.8.42](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.42/RPM-Browser-Lite-Setup-2.8.42-x64.exe)
+- [Versión portable x64 2.8.42](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/download/v2.8.42/RPM-Browser-Lite-Portable-2.8.42-x64.zip)
+- [Notas de la versión 2.8.42](https://github.com/rodrigopavezmina/rpm-browser-lite/releases/tag/v2.8.42)
 
 El instalador crea un acceso directo en el Escritorio y en el menú Inicio. Las actualizaciones verifican SHA-256, esperan el cierre de la versión anterior, escriben los archivos de forma atómica y abren el administrador al terminar.
 
@@ -38,7 +38,7 @@ La compilación usa el compilador de .NET Framework y descarga automáticamente 
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\build.ps1 -ArtifactLabel 2.8.41 -BuildFolder build-2.8.41
+.\build.ps1 -ArtifactLabel 2.8.42 -BuildFolder build-2.8.42
 ```
 
 Los archivos generados quedan en `artifacts\` (instalador, portable y `SHA256SUMS`). Las carpetas `build-*`, `artifacts`, `.packages`, `bin` y `obj` están excluidas del repositorio para no subir binarios temporales ni dependencias descargadas.

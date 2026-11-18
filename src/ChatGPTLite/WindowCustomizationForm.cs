@@ -261,6 +261,7 @@ namespace ChatGPTLite
             _window.Record.CustomTitle = (_title.Text ?? string.Empty).Trim();
             _window.Record.IconGlyph = IconVisuals.GetGlyphFromText(_glyph.Text);
             _window.Record.IconColorArgb = _iconColor.ToArgb();
+            _window.Record.IconColorManualOverride = true;
             _window.Record.NotesVisible = _showNotes.Checked;
             _window.Record.Category = (_category.Text ?? string.Empty).Trim();
             _window.Record.UseFavicon = _useFavicon;

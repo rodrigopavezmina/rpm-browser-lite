@@ -24,7 +24,7 @@ namespace ChatGPTLite
     {
         public const string HomeUrl = "https://chatgpt.com/";
         public const string ProductName = "RPM Browser Lite";
-        public const string ProductVersion = "2.8.41";
+        public const string ProductVersion = "2.8.42";
         public const string DefaultUpdateManifestUrl = "https://api.github.com/repos/rodrigopavezmina/rpm-browser-lite/contents/update-manifest.json?ref=main";
         private const string LegacyUpdateManifestUrl = "https://raw.githubusercontent.com/rodrigopavezmina/rpm-browser-lite/main/update-manifest.json";
 
@@ -259,6 +259,7 @@ namespace ChatGPTLite
             copy.Identifier = original.Identifier;
             copy.IconGlyph = original.IconGlyph;
             copy.IconColorArgb = original.IconColorArgb;
+            copy.IconColorManualOverride = original.IconColorManualOverride;
             copy.UseFavicon = original.UseFavicon;
             copy.FaviconPath = original.FaviconPath;
             copy.CustomIconPath = original.CustomIconPath;
@@ -370,7 +371,10 @@ namespace ChatGPTLite
             if (!string.IsNullOrWhiteSpace(profile.IconGlyph))
                 record.IconGlyph = profile.IconGlyph;
             if ((profile.IconColorArgb & unchecked((int)0xFF000000)) != 0)
+            {
                 record.IconColorArgb = profile.IconColorArgb;
+                record.IconColorManualOverride = true;
+            }
         }
 
         public void RememberDomainProfile(WindowRecord record)

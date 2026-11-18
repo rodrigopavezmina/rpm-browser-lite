@@ -149,6 +149,7 @@ namespace ChatGPTLite
             _lastTitle = string.IsNullOrWhiteSpace(record.Title) ? "Browser window" : record.Title;
             _isHibernated = startHibernated || record.Hibernated;
             _inactiveSinceUtc = DateTime.UtcNow;
+            ApplyFaviconAccentColorIfNeeded();
 
             Text = WindowTitle();
             StartPosition = FormStartPosition.Manual;
@@ -185,7 +186,9 @@ namespace ChatGPTLite
             _quickIdentifierBox = new TextBox();
             _quickIdentifierBox.BorderStyle = BorderStyle.FixedSingle;
             _quickIdentifierBox.Font = new Font("Segoe UI", 8.5f);
-            _quickIdentifierBox.Width = 48;
+            // Keep the identifier compact so the left identity block leaves room
+            // for the address bar even on a narrow window.
+            _quickIdentifierBox.Width = 30;
             _quickIdentifierBox.Height = 25;
             _quickIdentifierBox.TextAlign = HorizontalAlignment.Center;
             _quickIdentifierBox.Text = CompactIdentifierText(Record.Identifier);
@@ -270,7 +273,10 @@ namespace ChatGPTLite
                 OpenSelectedAddressSuggestion();
             };
 
-            // Keep the high-frequency actions at the beginning of the toolbar.
+            // Keep the identity block at the far left, followed by a triple
+            // separator and the normal browser actions.
+            AddToolbarAction(_appearanceButton, "✦ Title, ID and icon");
+            AddToolbarTripleSeparator();
             AddToolbarAction(_cloneButton, "⧈ Clone this window");
             AddToolbarAction(newButton, "✚ New window");
             AddToolbarAction(_bookmarksButton, "★ Chrome bookmarks");
@@ -285,8 +291,6 @@ namespace ChatGPTLite
             AddToolbarAction(_copyModeButton, "⧉ Copy mode: enable text selection");
             AddToolbarAction(_notesButton, "✎ Show or hide notes");
             AddToolbarAction(captureButton, "▣ Capture full page as PNG");
-            AddToolbarTripleSeparator();
-            AddToolbarAction(_appearanceButton, "✦ Title, ID and icon");
             AddToolbarTripleSeparator();
             AddToolbarAction(_downloadsButton, "⇩ Downloads (Ctrl+J)");
             AddToolbarAction(libraryButton, "▦ Windows and recent");
@@ -1231,6 +1235,7 @@ namespace ChatGPTLite
         private void ApplyQuickColor(Color color)
         {
             Record.IconColorArgb = color.ToArgb();
+            Record.IconColorManualOverride = true;
             ApplyPresentation();
             _app.RememberDomainProfile(Record);
             _app.WindowPresentationChanged();
@@ -2089,6 +2094,7 @@ namespace ChatGPTLite
                 {
                     Record.FaviconPath = path;
                     StoreSharedSiteFavicon(core.Source ?? Record.Url, path);
+                    ApplyFaviconAccentColorIfNeeded();
                     if (!IsDisposed && !Disposing)
                     {
                         ApplyPresentation();
@@ -2104,6 +2110,27 @@ namespace ChatGPTLite
             {
                 _faviconCaptureInProgress = false;
             }
+        }
+
+        private bool ApplyFaviconAccentColorIfNeeded()
+        {
+            if (Record == null || Record.IsQuickConsult || Record.UseFavicon != true ||
+                Record.IconColorManualOverride == true)
+                return false;
+            Color average;
+            if (!IconVisuals.TryGetAverageColor(Record.FaviconPath, out average))
+                return false;
+
+            // Keep very dark/light favicons usable as a native toolbar accent.
+            int brightness = (average.R * 299 + average.G * 587 + average.B * 114) / 1000;
+            if (brightness < 42)
+                average = ControlPaint.Light(average, 0.45f);
+            else if (brightness > 232)
+                average = ControlPaint.Dark(average, 0.22f);
+            if (Record.IconColorArgb == average.ToArgb())
+                return false;
+            Record.IconColorArgb = average.ToArgb();
+            return true;
         }
 
         private void StoreSharedSiteFavicon(string pageUrl, string sourcePath)

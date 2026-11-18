@@ -338,6 +338,12 @@ namespace ChatGPTLite
         [DataMember(Order = 29)]
         public bool TraySingleInstance { get; set; }
 
+        // Null means this field predates favicon-based accent inference.  Repair
+        // uses the legacy default colour as the migration boundary; any explicit
+        // palette choice thereafter is preserved even when the favicon changes.
+        [DataMember(Order = 30)]
+        public bool? IconColorManualOverride { get; set; }
+
         public static WindowRecord Create(string url)
         {
             WindowRecord record = new WindowRecord();
@@ -350,6 +356,7 @@ namespace ChatGPTLite
             record.LastActiveUtc = DateTime.UtcNow;
             record.IconGlyph = "✦";
             record.IconColorArgb = unchecked((int)0xFF4B73B8);
+            record.IconColorManualOverride = false;
             record.NoteText = string.Empty;
             record.NoteImages = new List<NoteImageRecord>();
             record.Category = string.Empty;
@@ -369,6 +376,8 @@ namespace ChatGPTLite
                 IconGlyph = "✦";
             if ((IconColorArgb & unchecked((int)0xFF000000)) == 0)
                 IconColorArgb = unchecked((int)0xFF4B73B8);
+            if (!IconColorManualOverride.HasValue)
+                IconColorManualOverride = IconColorArgb != unchecked((int)0xFF4B73B8);
             if (NoteText == null)
                 NoteText = string.Empty;
             if (NoteImages == null)
